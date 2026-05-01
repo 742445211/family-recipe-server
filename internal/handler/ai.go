@@ -32,21 +32,18 @@ func (h *AIHandler) Recommend(c *gin.Context) {
 		names[i] = r.Name
 	}
 
-	// 获取最近5条点菜记录的菜名
-	var items []model.MenuItem
-	h.db.Table("menu_items").
-		Joins("JOIN menus ON menus.id = menu_items.menu_id").
-		Joins("JOIN recipes ON recipes.id = menu_items.recipe_id").
-		Where("menus.family_id = ? AND menus.status = ?", familyID, "confirmed").
-		Order("menu_items.created_at DESC").
+	// 获取最近5条点菜记录的菜名（使用 daily_orders 表）
+	var orders []model.DailyOrder
+	h.db.Preload("Recipe").
+		Where("family_id = ?", familyID).
+		Order("created_at DESC").
 		Limit(5).
-		Select("recipes.name as recipe_name").
-		Find(&items)
+		Find(&orders)
 
 	historyNames := []string{}
-	for _, item := range items {
-		if item.Recipe != nil {
-			historyNames = append(historyNames, item.Recipe.Name)
+	for _, o := range orders {
+		if o.Recipe != nil {
+			historyNames = append(historyNames, o.Recipe.Name)
 		}
 	}
 	historySummary := "暂无历史记录"

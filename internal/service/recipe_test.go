@@ -20,8 +20,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&model.User{},
 		&model.FamilyMember{},
 		&model.Recipe{},
-		&model.Menu{},
-		&model.MenuItem{},
+		&model.DailyOrder{},
 		&model.Favorite{},
 	)
 	return db

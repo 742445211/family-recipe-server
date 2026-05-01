@@ -32,8 +32,7 @@ func main() {
 		&model.User{},
 		&model.FamilyMember{},
 		&model.Recipe{},
-		&model.Menu{},
-		&model.MenuItem{},
+		&model.DailyOrder{},
 		&model.Favorite{},
 	)
 
@@ -72,14 +71,11 @@ func main() {
 			auth.GET("/recipes", recipeH.List)
 			auth.POST("/recipes/:id/cooked", recipeH.Cooked)
 
-			// 点菜
-			menuH := handler.NewMenuHandler(db)
-			auth.POST("/menus", menuH.Create)
-			auth.GET("/menus/:id", menuH.Get)
-			auth.GET("/menus", menuH.List)
-			auth.POST("/menus/:id/items", menuH.AddItem)
-			auth.DELETE("/menus/:id/items/:item_id", menuH.RemoveItem)
-			auth.POST("/menus/:id/confirm", menuH.Confirm)
+			// 点菜（按日期，每天自动一条）
+			orderH := handler.NewOrderHandler(db)
+			auth.GET("/orders", orderH.List)
+			auth.POST("/orders", orderH.Add)
+			auth.DELETE("/orders/:id", orderH.Remove)
 
 			// 收藏
 			favH := handler.NewFavoriteHandler(db)

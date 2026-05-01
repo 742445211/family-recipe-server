@@ -78,11 +78,9 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 	}
 
 	data := templateData{
-		"thing1":  {Value: truncate(recipeName, 20)},  // 菜名
-		"name2":   {Value: truncate(adderName, 20)},    // 点菜人
-		"thing3":  {Value: mealName},                    // 餐次
-		"date4":   {Value: date},                        // 日期
-		"thing5":  {Value: "有人点了新菜，快去看看吧~"},     // 备注
+		"time7":    {Value: date + " " + mealName}, // 订单时间
+		"thing14":  {Value: truncate(adderName, 20)}, // 下单人
+		"thing13":  {Value: truncate(recipeName, 20)}, // 产品名称
 	}
 
 	body, _ := json.Marshal(map[string]any{

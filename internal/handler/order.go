@@ -27,7 +27,8 @@ func NewOrderHandler(db *gorm.DB) *OrderHandler {
 
 type addOrderReq struct {
 	RecipeID uint64 `json:"recipe_id" binding:"required"`
-	Date     string `json:"date"`     // 默认今天
+	Date     string `json:"date"`      // 默认今天
+	MealType string `json:"meal_type"` // breakfast/lunch/dinner，默认 dinner
 	Quantity int    `json:"quantity"`
 	Note     string `json:"note"`
 }
@@ -42,6 +43,9 @@ func (h *OrderHandler) Add(c *gin.Context) {
 	if req.Date == "" {
 		req.Date = today()
 	}
+	if req.MealType == "" {
+		req.MealType = "dinner"
+	}
 	if req.Quantity <= 0 {
 		req.Quantity = 1
 	}
@@ -49,20 +53,26 @@ func (h *OrderHandler) Add(c *gin.Context) {
 	order, err := h.svc.Add(
 		middleware.GetFamilyID(c),
 		req.RecipeID,
+		req.MealType,
 		middleware.GetUserID(c),
 		req.Date, req.Note, req.Quantity,
 	)
 	if err != nil {
+		if err.Error() == "该餐次已点过这道菜" {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "点菜失败"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": order})
 }
 
-// List — 获取某天的点菜列表（默认今天）
+// List — 获取某天某餐次的点菜列表
 func (h *OrderHandler) List(c *gin.Context) {
 	date := c.DefaultQuery("date", today())
-	orders, err := h.svc.GetByDate(middleware.GetFamilyID(c), date)
+	mealType := c.DefaultQuery("meal_type", "")
+	orders, err := h.svc.GetByDateAndMeal(middleware.GetFamilyID(c), date, mealType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "查询失败"})
 		return
@@ -73,7 +83,7 @@ func (h *OrderHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "data": orders})
 }
 
-// Remove — 取消点菜
+// Remove — 取消点菜（软删除）
 func (h *OrderHandler) Remove(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := h.svc.Remove(id, middleware.GetUserID(c)); err != nil {

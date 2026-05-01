@@ -15,13 +15,13 @@ jwt:
 
 wechat:
   appid: "wx6728bb699338278c"
-  secret: ""  # 填入小程序 secret
+  secret: "6bc3ad7b3e9cb5ed0cf85695feb0ff4f"  # 填入小程序 secret
 
 oss:
-  endpoint: "oss-cn-hangzhou.aliyuncs.com"
+  endpoint: "oss-cn-chengdu.aliyuncs.com"
   access_key_id: ""
   access_key_secret: ""
-  bucket: ""
+  bucket: "iahzs-2"
   region: "cn-hangzhou"
   custom_domain: ""  # 如绑定域名，留空则用OSS默认域名
 

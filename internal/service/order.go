@@ -27,10 +27,10 @@ func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID ui
 		quantity = 1
 	}
 
-	// 同日期+同餐次+同菜不能重复
+	// 同日期+同餐次+同菜不能重复（已删除的不算）
 	var count int64
-	s.db.Model(&model.DailyOrder{}).
-		Where("family_id = ? AND date = ? AND meal_type = ? AND recipe_id = ?",
+	s.db.Unscoped().Model(&model.DailyOrder{}).
+		Where("family_id = ? AND date = ? AND meal_type = ? AND recipe_id = ? AND deleted_at IS NULL",
 			familyID, date, mealType, recipeID).
 		Count(&count)
 	if count > 0 {

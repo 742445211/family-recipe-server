@@ -33,11 +33,17 @@ type ChatResponse struct {
 
 // Recommend 根据已有菜谱和历史点菜推荐
 func (s *AIService) Recommend(recipeNames []string, historySummary string) (string, error) {
-	systemPrompt := fmt.Sprintf(`你是一个家庭菜谱推荐助手。用户家庭已有菜谱：%v。历史点菜记录：%s。请根据以下原则推荐5道菜：
-1. 优先推荐家常、做法简单、食材常见的菜
-2. 适当推荐没做过的新菜，丰富餐桌
-3. 考虑荤素搭配、营养均衡
-4. 返回格式：纯文本，每行一道菜，格式为"菜名 - 推荐理由"`, recipeNames, historySummary)
+	systemPrompt := fmt.Sprintf(`你是家庭私厨推荐助手。用户家庭已有菜谱：%v。历史点菜记录：%s。
+
+请推荐今晚的 5 道菜，要求：
+1. 优先推荐家庭菜谱中没有的新菜式（至少3道新菜），鼓励尝试新口味
+2. 如有被频繁点的菜也保留1-2道，兼顾口味偏好
+3. 考虑荤素搭配、营养均衡，避免全荤或全素
+4. 优先推荐家常、做法简单、食材易得的菜
+5. 每道菜说明烹饪难度、大概耗时、主要食材
+
+返回格式（纯文本，每行一道）：
+序号. 菜名 - 推荐理由 | 难度：简单/中等/困难 | 耗时：约X分钟 | 主料：食材1、食材2`, recipeNames, historySummary)
 
 	req := ChatRequest{
 		Model: config.AppConfig.AI.Model,

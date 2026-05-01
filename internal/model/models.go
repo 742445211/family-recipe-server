@@ -31,7 +31,7 @@ type FamilyMember struct {
 	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	FamilyID  uint64    `gorm:"not null;uniqueIndex:uk_family_user" json:"family_id"`
 	UserID    uint64    `gorm:"not null;uniqueIndex:uk_family_user" json:"user_id"`
-	Role      string    `gorm:"type:enum('owner','admin','member');default:member" json:"role"`
+	Role      string    `gorm:"size:20;default:member" json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 
 	Family *Family `gorm:"foreignKey:FamilyID" json:"family,omitempty"`
@@ -49,7 +49,7 @@ type Recipe struct {
 	Seasonings  string   `gorm:"type:json" json:"seasonings"`
 	Steps       string   `gorm:"type:json" json:"steps"`
 	CookTime   int       `gorm:"default:0" json:"cook_time"`
-	Difficulty string    `gorm:"type:enum('easy','medium','hard');default:medium" json:"difficulty"`
+	Difficulty string    `gorm:"size:20;default:medium" json:"difficulty"`
 	ImageKey   string    `gorm:"size:200" json:"image_key"`
 	CoverURL   string    `gorm:"size:500" json:"cover_url"`
 	Tips       string    `gorm:"type:text" json:"tips"`
@@ -72,7 +72,7 @@ type Menu struct {
 	FamilyID  uint64    `gorm:"not null;index:idx_family_date" json:"family_id"`
 	Name      string    `gorm:"size:100;not null" json:"name"`
 	Date      string    `gorm:"type:date;not null;index:idx_family_date" json:"date"`
-	Status    string    `gorm:"type:enum('draft','voting','confirmed');default:draft" json:"status"`
+	Status    string    `gorm:"size:20;default:draft" json:"status"`
 	CreatorID uint64    `gorm:"not null" json:"creator_id"`
 	CreatedAt time.Time `json:"created_at"`
 

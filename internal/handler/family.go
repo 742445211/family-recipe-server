@@ -126,13 +126,14 @@ func (h *FamilyHandler) ToggleChef(c *gin.Context) {
 	}
 
 	// 切换厨师身份
-	tx := h.db.Model(&member).Update("is_chef", !member.IsChef)
+	newVal := !member.IsChef
+	tx := h.db.Model(&member).UpdateColumn("is_chef", newVal)
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "操作失败"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": gin.H{"is_chef": !member.IsChef}})
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": gin.H{"is_chef": newVal}})
 }
 
 const codeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"

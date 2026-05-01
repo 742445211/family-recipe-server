@@ -27,10 +27,10 @@ func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID ui
 		quantity = 1
 	}
 
-	// 同日期+同餐次+同菜不能重复（已删除的不算）
+	// 同日期+同餐次+同菜不能重复（软删除的不算）
 	var count int64
-	s.db.Unscoped().Model(&model.DailyOrder{}).
-		Where("family_id = ? AND date = ? AND meal_type = ? AND recipe_id = ? AND deleted_at IS NULL",
+	s.db.Model(&model.DailyOrder{}).
+		Where("family_id = ? AND date = ? AND meal_type = ? AND recipe_id = ?",
 			familyID, date, mealType, recipeID).
 		Count(&count)
 	if count > 0 {
@@ -54,9 +54,9 @@ func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID ui
 	return &order, nil
 }
 
-// Remove 取消点菜（硬删除 + 权限校验）
+// Remove 取消点菜（软删除 + 权限校验）
 func (s *OrderService) Remove(orderID, userID uint64) error {
-	result := s.db.Unscoped().Where("id = ? AND added_by = ?", orderID, userID).Delete(&model.DailyOrder{})
+	result := s.db.Where("id = ? AND added_by = ?", orderID, userID).Delete(&model.DailyOrder{})
 	if result.RowsAffected == 0 {
 		return errors.New("无权删除或不存在")
 	}

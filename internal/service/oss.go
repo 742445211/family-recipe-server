@@ -4,41 +4,54 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"os"
 	"path/filepath"
 	"time"
 
 	"recipe-server/config"
+
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
-// SaveImage 保存上传图片到本地 OSS 目录，返回 key 和 URL
-// 后续可替换为真正的阿里云 OSS SDK
+// SaveImage 上传图片到阿里云 OSS，返回 key 和 URL
 func SaveImage(file multipart.File, header *multipart.FileHeader) (string, string, error) {
-	uploadDir := "/www/uploads/recipe"
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		return "", "", fmt.Errorf("创建上传目录失败: %w", err)
-	}
-
 	ext := filepath.Ext(header.Filename)
+	if ext == "" {
+		ext = ".jpg"
+	}
 	key := fmt.Sprintf("recipe/%d%s", time.Now().UnixNano(), ext)
-	savePath := filepath.Join(uploadDir, fmt.Sprintf("%d%s", time.Now().UnixNano(), ext))
 
-	dst, err := os.Create(savePath)
+	cfg := config.AppConfig.OSS
+	url, err := uploadToOSS(cfg, key, file, header.Size, header.Header.Get("Content-Type"))
 	if err != nil {
-		return "", "", fmt.Errorf("创建文件失败: %w", err)
+		return "", "", fmt.Errorf("OSS上传失败: %w", err)
 	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		return "", "", fmt.Errorf("保存文件失败: %w", err)
-	}
-
-	// 如果有自定义域名则用，否则用本地URL
-	baseURL := config.AppConfig.OSS.CustomDomain
-	if baseURL == "" {
-		baseURL = fmt.Sprintf("http://%s/uploads/recipe", "localhost:8080")
-	}
-
-	url := fmt.Sprintf("%s/%d%s", baseURL, time.Now().UnixNano(), ext)
 	return key, url, nil
+}
+
+// uploadToOSS 底层的 OSS 上传
+func uploadToOSS(cfg config.OSSConfig, key string, reader io.Reader, size int64, contentType string) (string, error) {
+	client, err := oss.New(cfg.Endpoint, cfg.AccessKeyID, cfg.AccessKeySecret)
+	if err != nil {
+		return "", fmt.Errorf("OSS连接失败: %w", err)
+	}
+
+	bucket, err := client.Bucket(cfg.Bucket)
+	if err != nil {
+		return "", fmt.Errorf("获取Bucket失败: %w", err)
+	}
+
+	options := []oss.Option{}
+	if contentType != "" {
+		options = append(options, oss.ContentType(contentType))
+	}
+
+	if err := bucket.PutObject(key, reader, options...); err != nil {
+		return "", err
+	}
+
+	// 构建 URL
+	if cfg.CustomDomain != "" {
+		return fmt.Sprintf("%s/%s", cfg.CustomDomain, key), nil
+	}
+	return fmt.Sprintf("https://%s.%s/%s", cfg.Bucket, cfg.Endpoint, key), nil
 }

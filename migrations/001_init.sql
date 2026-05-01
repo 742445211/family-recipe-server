@@ -1,0 +1,105 @@
+-- 家庭点菜 & 菜谱小程序 — 数据库初始化
+
+CREATE DATABASE IF NOT EXISTS recipe_app
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+USE recipe_app;
+
+-- 家庭
+CREATE TABLE IF NOT EXISTS families (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  invite_code VARCHAR(8) NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- 用户
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  openid VARCHAR(64) NOT NULL UNIQUE,
+  unionid VARCHAR(64) DEFAULT '',
+  nickname VARCHAR(100) DEFAULT '',
+  avatar_url VARCHAR(500) DEFAULT '',
+  current_family_id BIGINT UNSIGNED DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- 家庭成员
+CREATE TABLE IF NOT EXISTS family_members (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  family_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  role ENUM('owner','admin','member') NOT NULL DEFAULT 'member',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_family_user (family_id, user_id)
+) ENGINE=InnoDB;
+
+-- 菜谱
+CREATE TABLE IF NOT EXISTS recipes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  category VARCHAR(50) NOT NULL DEFAULT '其他',
+  ingredients JSON,
+  seasonings JSON,
+  steps JSON,
+  cook_time INT UNSIGNED DEFAULT 0 COMMENT '烹饪时长(分钟)',
+  difficulty ENUM('easy','medium','hard') NOT NULL DEFAULT 'medium',
+  image_key VARCHAR(200) DEFAULT '',
+  cover_url VARCHAR(500) DEFAULT '',
+  tips TEXT,
+  creator_id BIGINT UNSIGNED NOT NULL,
+  family_id BIGINT UNSIGNED NOT NULL,
+  is_public TINYINT(1) NOT NULL DEFAULT 1,
+  cook_count INT UNSIGNED NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (creator_id) REFERENCES users(id),
+  FOREIGN KEY (family_id) REFERENCES families(id),
+  INDEX idx_name (name),
+  INDEX idx_category (category),
+  INDEX idx_family (family_id)
+) ENGINE=InnoDB;
+
+-- 点菜单
+CREATE TABLE IF NOT EXISTS menus (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  family_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(100) NOT NULL COMMENT '如"周五晚餐"',
+  date DATE NOT NULL,
+  status ENUM('draft','voting','confirmed') NOT NULL DEFAULT 'draft',
+  creator_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (family_id) REFERENCES families(id),
+  FOREIGN KEY (creator_id) REFERENCES users(id),
+  INDEX idx_family_date (family_id, date)
+) ENGINE=InnoDB;
+
+-- 点菜明细
+CREATE TABLE IF NOT EXISTS menu_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  menu_id BIGINT UNSIGNED NOT NULL,
+  recipe_id BIGINT UNSIGNED NOT NULL,
+  added_by BIGINT UNSIGNED NOT NULL,
+  quantity INT UNSIGNED NOT NULL DEFAULT 1,
+  note VARCHAR(200) DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE,
+  FOREIGN KEY (recipe_id) REFERENCES recipes(id),
+  FOREIGN KEY (added_by) REFERENCES users(id),
+  UNIQUE KEY uk_menu_recipe (menu_id, recipe_id)
+) ENGINE=InnoDB;
+
+-- 收藏
+CREATE TABLE IF NOT EXISTS favorites (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  recipe_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_user_recipe (user_id, recipe_id)
+) ENGINE=InnoDB;

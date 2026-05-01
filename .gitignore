@@ -16,3 +16,6 @@ Thumbs.db
 
 # Uploads (local)
 /www/uploads/
+
+# config.yaml
+config.yaml

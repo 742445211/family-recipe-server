@@ -54,9 +54,9 @@ func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID ui
 	return &order, nil
 }
 
-// Remove 取消点菜（软删除 + 权限校验）
+// Remove 取消点菜（硬删除 + 权限校验）
 func (s *OrderService) Remove(orderID, userID uint64) error {
-	result := s.db.Where("id = ? AND added_by = ?", orderID, userID).Delete(&model.DailyOrder{})
+	result := s.db.Unscoped().Where("id = ? AND added_by = ?", orderID, userID).Delete(&model.DailyOrder{})
 	if result.RowsAffected == 0 {
 		return errors.New("无权删除或不存在")
 	}

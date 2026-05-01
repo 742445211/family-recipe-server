@@ -66,6 +66,42 @@ func (h *OrderHandler) Add(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": order})
+
+	// 异步通知家庭厨师（捕获值避免 gin context 回收问题）
+	userID := middleware.GetUserID(c)
+	familyID := middleware.GetFamilyID(c)
+	recipeID := req.RecipeID
+	mealType := req.MealType
+	orderDate := req.Date
+	db := h.svc.DB()
+	go func() {
+		var adder model.User
+		var recipe model.Recipe
+		if err := db.First(&adder, userID).Error; err != nil {
+			return
+		}
+		if err := db.First(&recipe, recipeID).Error; err != nil {
+			return
+		}
+
+		// 查找家庭厨师（排除点菜人自己）
+		var chefs []model.FamilyMember
+		db.Where("family_id = ? AND is_chef = ? AND user_id != ?",
+			familyID, true, userID).
+			Preload("User").Find(&chefs)
+
+		for _, chef := range chefs {
+			if chef.User != nil {
+				service.SendOrderNotify(
+					chef.User.OpenID,
+					recipe.Name,
+					adder.Nickname,
+					mealType,
+					orderDate,
+				)
+			}
+		}
+	}()
 }
 
 // List — 获取某天某餐次的点菜列表

@@ -96,7 +96,25 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": user})
+
+	// 查当前家庭的厨师身份
+	var isChef bool
+	if user.CurrentFamilyID != nil {
+		var member model.FamilyMember
+		if h.db.Where("family_id = ? AND user_id = ?", *user.CurrentFamilyID, userID).
+			First(&member).Error == nil {
+			isChef = member.IsChef
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": gin.H{
+		"id":                user.ID,
+		"openid":            user.OpenID,
+		"nickname":          user.Nickname,
+		"avatar_url":        user.AvatarURL,
+		"current_family_id": user.CurrentFamilyID,
+		"is_chef":           isChef,
+	}})
 }
 
 type updateProfileReq struct {

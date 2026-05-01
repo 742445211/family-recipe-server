@@ -16,6 +16,11 @@ func NewOrderService(db *gorm.DB) *OrderService {
 	return &OrderService{db: db}
 }
 
+// DB returns the underlying gorm.DB
+func (s *OrderService) DB() *gorm.DB {
+	return s.db
+}
+
 // Add 点一道菜到指定日期的指定餐次
 func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID uint64, date, note string, quantity int) (*model.DailyOrder, error) {
 	if quantity <= 0 {

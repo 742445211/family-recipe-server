@@ -61,6 +61,7 @@ func main() {
 			auth.POST("/families/join", familyH.Join)
 			auth.GET("/families", familyH.List)
 			auth.GET("/families/:id/members", familyH.Members)
+			auth.POST("/families/chef", familyH.ToggleChef)
 
 			// 菜谱
 			recipeH := handler.NewRecipeHandler(db)

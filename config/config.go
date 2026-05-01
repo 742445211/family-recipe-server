@@ -40,8 +40,9 @@ type JWTConfig struct {
 }
 
 type WeChatConfig struct {
-	AppID  string `yaml:"appid"`
-	Secret string `yaml:"secret"`
+	AppID      string `yaml:"appid"`
+	Secret     string `yaml:"secret"`
+	TemplateID string `yaml:"template_id"`
 }
 
 type OSSConfig struct {

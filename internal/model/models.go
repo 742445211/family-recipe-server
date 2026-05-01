@@ -39,6 +39,7 @@ type FamilyMember struct {
 	FamilyID  uint64         `gorm:"not null;uniqueIndex:uk_family_user" json:"family_id"`
 	UserID    uint64         `gorm:"not null;uniqueIndex:uk_family_user" json:"user_id"`
 	Role      string         `gorm:"size:20;default:member" json:"role"`
+	IsChef    bool           `gorm:"default:false" json:"is_chef"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

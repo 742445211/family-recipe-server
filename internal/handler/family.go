@@ -110,6 +110,31 @@ func (h *FamilyHandler) Members(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "data": members})
 }
 
+// ToggleChef 切换当前用户的厨师身份
+func (h *FamilyHandler) ToggleChef(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	familyID := middleware.GetFamilyID(c)
+	if familyID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请先选择家庭"})
+		return
+	}
+
+	var member model.FamilyMember
+	if err := h.db.Where("family_id = ? AND user_id = ?", familyID, userID).First(&member).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "你不是该家庭的成员"})
+		return
+	}
+
+	// 切换厨师身份
+	tx := h.db.Model(&member).Update("is_chef", !member.IsChef)
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "操作失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": gin.H{"is_chef": !member.IsChef}})
+}
+
 const codeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 func generateCode(n int) string {

@@ -15,8 +15,8 @@ func (Family) TableName() string { return "families" }
 // User 用户
 type User struct {
 	ID              uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	OpenID          string    `gorm:"size:64;uniqueIndex;not null" json:"openid"`
-	UnionID         string    `gorm:"size:64" json:"unionid"`
+	OpenID          string    `gorm:"size:64;uniqueIndex;not null;column:openid" json:"openid"`
+	UnionID         string    `gorm:"size:64;column:unionid" json:"unionid"`
 	Nickname        string    `gorm:"size:100" json:"nickname"`
 	AvatarURL       string    `gorm:"size:500" json:"avatar_url"`
 	CurrentFamilyID *uint64   `json:"current_family_id"`

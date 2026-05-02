@@ -72,7 +72,10 @@ func (h *RecipeHandler) Get(c *gin.Context) {
 }
 
 func (h *RecipeHandler) List(c *gin.Context) {
-	familyID := middleware.GetFamilyID(c)
+	familyID := uint64(0)
+	if fid, exists := c.Get("family_id"); exists {
+		familyID = fid.(uint64)
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 

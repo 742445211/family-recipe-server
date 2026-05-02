@@ -48,6 +48,11 @@ func main() {
 		authH := handler.NewAuthHandler(db)
 		api.POST("/auth/login", authH.Login)
 
+		// 公开的菜谱浏览（审核要求首页不能是登录页）
+		recipeH := handler.NewRecipeHandler(db)
+		api.GET("/recipes", recipeH.List)
+		api.GET("/recipes/:id", recipeH.Get)
+
 		// 需要认证
 		auth := api.Group("", middleware.AuthRequired())
 		{
@@ -63,13 +68,10 @@ func main() {
 			auth.GET("/families/:id/members", familyH.Members)
 			auth.POST("/families/chef", familyH.ToggleChef)
 
-			// 菜谱
-			recipeH := handler.NewRecipeHandler(db)
+			// 菜谱（写操作）
 			auth.POST("/recipes", recipeH.Create)
 			auth.PUT("/recipes/:id", recipeH.Update)
 			auth.DELETE("/recipes/:id", recipeH.Delete)
-			auth.GET("/recipes/:id", recipeH.Get)
-			auth.GET("/recipes", recipeH.List)
 			auth.POST("/recipes/:id/cooked", recipeH.Cooked)
 
 			// 点菜（按日期，每天自动一条）

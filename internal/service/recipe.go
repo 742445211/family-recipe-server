@@ -44,7 +44,10 @@ func (s *RecipeService) List(familyID uint64, keyword, category string, page, pa
 	var recipes []model.Recipe
 	var total int64
 
-	query := s.db.Model(&model.Recipe{}).Where("family_id = ?", familyID)
+	query := s.db.Model(&model.Recipe{})
+	if familyID > 0 {
+		query = query.Where("family_id = ?", familyID)
+	}
 	if keyword != "" {
 		query = query.Where("name LIKE ?", "%"+keyword+"%")
 	}

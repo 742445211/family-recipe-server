@@ -49,9 +49,10 @@ type JWTConfig struct {
 
 // WeChatConfig 微信小程序配置。
 type WeChatConfig struct {
-	AppID      string `yaml:"appid"`       // 小程序 AppID
-	Secret     string `yaml:"secret"`      // 小程序 AppSecret
-	TemplateID string `yaml:"template_id"` // 订阅消息模板 ID
+	AppID            string `yaml:"appid"`             // 小程序 AppID
+	Secret           string `yaml:"secret"`            // 小程序 AppSecret
+	TemplateID       string `yaml:"template_id"`       // 订阅消息模板 ID
+	MiniprogramState string `yaml:"miniprogram_state"` // 小程序版本：developer / trial / formal
 }
 
 // OSSConfig 阿里云 OSS 对象存储配置。

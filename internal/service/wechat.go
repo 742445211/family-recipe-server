@@ -170,11 +170,16 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 	}
 
 	// 构造微信订阅消息请求体
+	// 默认使用开发版，方便真机调试时直接收到通知
+	state := config.AppConfig.WeChat.MiniprogramState
+	if state == "" {
+		state = "developer"
+	}
 	body, _ := json.Marshal(map[string]any{
 		"touser":            openid,                                   // 接收者的 OpenID
 		"template_id":       config.AppConfig.WeChat.TemplateID,      // 订阅消息模板 ID
 		"page":              "pages/order/order",                      // 点击消息跳转的小程序页面
-		"miniprogram_state": "developer",                               // 跳转小程序类型：开发版
+		"miniprogram_state": state,                                    // 跳转小程序类型
 		"lang":              "zh_CN",                                   // 语言
 		"data":              data,                                      // 模板字段数据
 	})

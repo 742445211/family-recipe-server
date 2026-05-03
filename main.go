@@ -1,3 +1,6 @@
+// Package main 菜谱服务入口。
+// 基于 Gin + GORM 构建，提供用户认证（微信小程序登录）、
+// 家庭管理、菜谱 CRUD、每日点菜、收藏、图片上传以及 AI 智能推荐等 API。
 package main
 
 import (
@@ -14,19 +17,20 @@ import (
 	"gorm.io/gorm"
 )
 
+// main 应用入口：加载配置 → 连接数据库 → 自动迁移 → 注册路由 → 启动服务。
 func main() {
-	// 加载配置
+	// 1. 加载 YAML 配置文件
 	if err := config.Load("config.yaml"); err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	// 连接数据库
+	// 2. 连接 MySQL 数据库（GORM）
 	db, err := gorm.Open(mysql.Open(config.AppConfig.MySQL.DSN()), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("连接数据库失败: %v", err)
 	}
 
-	// 自动迁移
+	// 3. 自动迁移：根据模型结构体创建/更新表结构
 	db.AutoMigrate(
 		&model.Family{},
 		&model.User{},
@@ -36,66 +40,68 @@ func main() {
 		&model.Favorite{},
 	)
 
-	// 路由
+	// 4. 创建 Gin 路由引擎（带默认中间件：Logger + Recovery）
 	r := gin.Default()
 
-	// 静态文件（上传图片访问）
+	// 静态文件服务：上传的图片可通过 /uploads 路径直接访问
 	r.Static("/uploads", "/www/uploads")
 
+	// API 路由组
 	api := r.Group("/api")
 	{
-		// 公开接口
+		// ---------- 公开接口（无需登录） ----------
 		authH := handler.NewAuthHandler(db)
-		api.POST("/auth/login", authH.Login)
+		api.POST("/auth/login", authH.Login) // 微信登录
 
 		// 公开的菜谱浏览（审核要求首页不能是登录页）
 		recipeH := handler.NewRecipeHandler(db)
-		api.GET("/recipes", recipeH.List)
-		api.GET("/recipes/:id", recipeH.Get)
+		api.GET("/recipes", recipeH.List)     // 菜谱列表（支持搜索）
+		api.GET("/recipes/:id", recipeH.Get)  // 菜谱详情
 
-		// 需要认证
+		// ---------- 需要认证的接口 ----------
 		auth := api.Group("", middleware.AuthRequired())
 		{
-			// 用户
-			auth.GET("/users/me", authH.GetProfile)
-			auth.PUT("/users/me", authH.UpdateProfile)
+			// 用户信息
+			auth.GET("/users/me", authH.GetProfile)      // 获取个人信息
+			auth.PUT("/users/me", authH.UpdateProfile)    // 更新个人信息
 
-			// 家庭
+			// 家庭管理
 			familyH := handler.NewFamilyHandler(db)
-			auth.POST("/families", familyH.Create)
-			auth.POST("/families/join", familyH.Join)
-			auth.GET("/families", familyH.List)
-			auth.GET("/families/:id/members", familyH.Members)
-			auth.POST("/families/chef", familyH.ToggleChef)
+			auth.POST("/families", familyH.Create)              // 创建家庭
+			auth.POST("/families/join", familyH.Join)           // 通过邀请码加入家庭
+			auth.GET("/families", familyH.List)                 // 我的家庭列表
+			auth.GET("/families/:id/members", familyH.Members)  // 家庭成员列表
+			auth.POST("/families/chef", familyH.ToggleChef)     // 切换厨师身份
 
-			// 菜谱（写操作）
-			auth.POST("/recipes", recipeH.Create)
-			auth.PUT("/recipes/:id", recipeH.Update)
-			auth.DELETE("/recipes/:id", recipeH.Delete)
-			auth.POST("/recipes/:id/cooked", recipeH.Cooked)
+			// 菜谱写操作
+			auth.POST("/recipes", recipeH.Create)            // 创建菜谱
+			auth.PUT("/recipes/:id", recipeH.Update)         // 更新菜谱
+			auth.DELETE("/recipes/:id", recipeH.Delete)      // 删除菜谱
+			auth.POST("/recipes/:id/cooked", recipeH.Cooked) // 标记已烹饪
 
-			// 点菜（按日期，每天自动一条）
+			// 每日点菜
 			orderH := handler.NewOrderHandler(db)
-			auth.GET("/orders", orderH.List)
-			auth.POST("/orders", orderH.Add)
-			auth.DELETE("/orders/:id", orderH.Remove)
+			auth.GET("/orders", orderH.List)         // 查看点菜列表
+			auth.POST("/orders", orderH.Add)         // 点一道菜
+			auth.DELETE("/orders/:id", orderH.Remove) // 取消点菜
 
 			// 收藏
 			favH := handler.NewFavoriteHandler(db)
-			auth.POST("/favorites/:id", favH.Add)
-			auth.DELETE("/favorites/:id", favH.Remove)
-			auth.GET("/favorites", favH.List)
+			auth.POST("/favorites/:id", favH.Add)     // 收藏菜谱
+			auth.DELETE("/favorites/:id", favH.Remove) // 取消收藏
+			auth.GET("/favorites", favH.List)          // 收藏列表
 
-			// 上传
+			// 图片上传
 			uploadH := &handler.UploadHandler{}
 			auth.POST("/upload", uploadH.Upload)
 
-			// AI
+			// AI 智能推荐
 			aiH := handler.NewAIHandler(db)
 			auth.POST("/ai/recommend", aiH.Recommend)
 		}
 	}
 
+	// 启动 HTTP 服务器
 	addr := fmt.Sprintf(":%d", config.AppConfig.Server.Port)
 	log.Printf("服务启动: http://localhost%s", addr)
 	r.Run(addr)

@@ -122,10 +122,10 @@ func (h *OrderHandler) Add(c *gin.Context) {
 			return // 查不到则放弃通知
 		}
 
-		// 查找家庭中所有厨师（排除点菜人自己，避免自己通知自己）
+		// 查找家庭中所有厨师（含点菜人自己）
 		var chefs []model.FamilyMember
-		db.Where("family_id = ? AND is_chef = ? AND user_id != ?",
-			familyID, true, userID).
+		db.Where("family_id = ? AND is_chef = ?",
+			familyID, true).
 			Preload("User").Find(&chefs)
 
 		// 逐个向厨师推送微信订阅消息

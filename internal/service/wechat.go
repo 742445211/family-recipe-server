@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -194,6 +195,8 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 
 	// 解析响应体检查微信业务错误码
 	respBody, _ := io.ReadAll(resp.Body)
+	log.Printf("[微信API] subscribe/send → openid=%s template=%s response: %s",
+		openid, config.AppConfig.WeChat.TemplateID, string(respBody))
 	var result struct {
 		ErrCode int    `json:"errcode"`
 		ErrMsg  string `json:"errmsg"`

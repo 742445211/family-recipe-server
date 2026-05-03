@@ -8,6 +8,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -113,13 +114,15 @@ func (h *OrderHandler) Add(c *gin.Context) {
 		// 查询点菜人昵称
 		var adder model.User
 		if err := db.First(&adder, userID).Error; err != nil {
-			return // 查不到则放弃通知
+			log.Printf("[通知] 查询点菜人失败 userID=%d: %v", userID, err)
+			return
 		}
 
 		// 查询菜谱名称
 		var recipe model.Recipe
 		if err := db.First(&recipe, recipeID).Error; err != nil {
-			return // 查不到则放弃通知
+			log.Printf("[通知] 查询菜谱失败 recipeID=%d: %v", recipeID, err)
+			return
 		}
 
 		// 查找家庭中所有厨师（含点菜人自己）
@@ -128,19 +131,27 @@ func (h *OrderHandler) Add(c *gin.Context) {
 			familyID, true).
 			Preload("User").Find(&chefs)
 
+		log.Printf("[通知] 点菜通知：%s 点了 %s，家庭 %d 共 %d 位厨师",
+			adder.Nickname, recipe.Name, familyID, len(chefs))
+
 		// 逐个向厨师推送微信订阅消息
 		for _, chef := range chefs {
-			if chef.User != nil {
-				if err := service.SendOrderNotify(
-					chef.User.OpenID,
-					recipe.Name,
-					adder.Nickname,
-					mealType,
-					orderDate,
-				); err != nil {
-					// 记录通知失败日志（非致命，不阻塞主流程）
-					c.Error(err)
-				}
+			if chef.User == nil || chef.User.OpenID == "" {
+				log.Printf("[通知] 跳过厨师 userID=%d（无OpenID）", chef.UserID)
+				continue
+			}
+			if err := service.SendOrderNotify(
+				chef.User.OpenID,
+				recipe.Name,
+				adder.Nickname,
+				mealType,
+				orderDate,
+			); err != nil {
+				log.Printf("[通知] 推送失败 → chef=%s(%d) recipe=%s: %v",
+					chef.User.Nickname, chef.UserID, recipe.Name, err)
+			} else {
+				log.Printf("[通知] 推送成功 → chef=%s(%d) recipe=%s",
+					chef.User.Nickname, chef.UserID, recipe.Name)
 			}
 		}
 	}()

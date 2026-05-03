@@ -174,7 +174,7 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 		"touser":            openid,                                   // 接收者的 OpenID
 		"template_id":       config.AppConfig.WeChat.TemplateID,      // 订阅消息模板 ID
 		"page":              "pages/order/order",                      // 点击消息跳转的小程序页面
-		"miniprogram_state": "formal",                                 // 跳转小程序类型：正式版
+		"miniprogram_state": "developer",                               // 跳转小程序类型：开发版
 		"lang":              "zh_CN",                                   // 语言
 		"data":              data,                                      // 模板字段数据
 	})

@@ -131,13 +131,16 @@ func (h *OrderHandler) Add(c *gin.Context) {
 		// 逐个向厨师推送微信订阅消息
 		for _, chef := range chefs {
 			if chef.User != nil {
-				service.SendOrderNotify(
+				if err := service.SendOrderNotify(
 					chef.User.OpenID,
 					recipe.Name,
 					adder.Nickname,
 					mealType,
 					orderDate,
-				)
+				); err != nil {
+					// 记录通知失败日志（非致命，不阻塞主流程）
+					c.Error(err)
+				}
 			}
 		}
 	}()

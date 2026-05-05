@@ -154,6 +154,12 @@ func (h *OrderHandler) Add(c *gin.Context) {
 					chef.User.Nickname, chef.UserID, recipe.Name)
 			}
 		}
+
+		// 更新所有厨师的服务卡片（聚合展示今日点菜状态）
+		service.UpdateChefServiceCard(db, familyID)
+
+		// 更新动态消息卡片（群聊中已分享的菜单卡片）
+		service.UpdateDynamicMessages(db, familyID, orderDate)
 	}()
 }
 
@@ -213,4 +219,28 @@ func (h *OrderHandler) Remove(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok"})
+}
+
+// Share 创建动态消息 activity_id，供前端分享菜单卡片到群聊。
+//
+// 路由：POST /api/orders/share（需认证）
+//
+// 功能：
+//   调用微信 API 创建 activity_id，存入内存映射表，
+//   后续点菜时自动更新该卡片内容。
+//
+// 响应：
+//   - 成功：{"code":0, "data":{"activity_id":"xxx"}}
+//   - 失败：{"code":500, "msg":"创建失败"}
+func (h *OrderHandler) Share(c *gin.Context) {
+	activityID, err := service.CreateActivityID()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建分享失败"})
+		return
+	}
+
+	// 记录 activity_id 对应关系，后续点菜时更新卡片
+	service.StoreActivity(activityID, middleware.GetFamilyID(c), today())
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"activity_id": activityID}})
 }

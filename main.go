@@ -84,6 +84,7 @@ func main() {
 			auth.GET("/orders", orderH.List)         // 查看点菜列表
 			auth.POST("/orders", orderH.Add)         // 点一道菜
 			auth.DELETE("/orders/:id", orderH.Remove) // 取消点菜
+			auth.POST("/orders/share", orderH.Share) // 创建动态消息分享
 
 			// 收藏
 			favH := handler.NewFavoriteHandler(db)

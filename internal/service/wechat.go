@@ -23,10 +23,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"recipe-server/config"
+	"recipe-server/internal/model"
+
+	"gorm.io/gorm"
 )
 
 // 全局 access_token 缓存变量。
@@ -106,7 +110,7 @@ func GetAccessToken() (string, error) {
 }
 
 // templateData 微信订阅消息模板数据字段映射。
-// 微信模板消息要求 data 字段为 map[string]struct{value string} 格式。
+// 微信订阅消息要求 data 字段为 map[string]struct{value string} 格式。
 // 详见：https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/mp-message-management/subscribe-message/sendMessage.html
 type templateData map[string]struct {
 	Value string `json:"value"` // 模板字段的实际值
@@ -137,7 +141,7 @@ type templateData map[string]struct {
 //  1. 检查 TemplateID 是否配置，未配置则跳过（返回 nil）
 //  2. 获取 access_token（自动从缓存获取或远程请求）
 //  3. 将英文餐次映射为中文名称
-//  4. 构造模板消息 JSON
+//  4. 构造订阅消息 JSON
 //  5. 发送 POST 请求到微信订阅消息 API
 //  6. 检查响应中的 errcode
 //
@@ -163,7 +167,7 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 		mealName = mealType // 未知类型保留原值
 	}
 
-	// 构造模板消息字段（thing 类型字段最多 20 字符，超出自动截断）
+	// 构造订阅消息字段（thing 类型字段最多 20 字符，超出自动截断）
 	data := templateData{
 		"time7":   {Value: date + " " + mealName},          // 订单时间 = 日期 + 餐次
 		"thing14": {Value: truncate(adderName, 20)},         // 下单人昵称
@@ -207,6 +211,254 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 	}
 
 	return nil
+}
+
+// UpdateChefServiceCard 更新指定家庭所有厨师的服务卡片。
+//
+// 聚合今天各餐次的点菜情况，生成摘要文本，调用 /wxa/set_user_notify 更新每位厨师的卡片。
+//
+// 参数:
+//   - db        *gorm.DB  - 数据库连接
+//   - familyID  uint64    - 家庭 ID
+//
+// 说明:
+//   - 查询今天所有餐次的点菜记录，按餐次分组统计
+//   - 卡片摘要格式："早餐2道/午餐3道/晚餐5道"
+//   - 未配置 TemplateID 时静默跳过
+func UpdateChefServiceCard(db *gorm.DB, familyID uint64) {
+	if config.AppConfig.WeChat.TemplateID == "" {
+		return
+	}
+
+	token, err := GetAccessToken()
+	if err != nil {
+		log.Printf("[服务卡片] 获取token失败: %v", err)
+		return
+	}
+
+	today := time.Now().Format("2006-01-02")
+
+	// 查询今日各餐次点菜数量
+	type mealCount struct {
+		MealType string
+		Count    int64
+	}
+	var counts []mealCount
+	db.Model(&model.DailyOrder{}).
+		Select("meal_type, COUNT(*) as count").
+		Where("family_id = ? AND date = ?", familyID, today).
+		Group("meal_type").
+		Find(&counts)
+
+	// 查询最近点菜的菜名（最多3道）
+	var recentOrders []model.DailyOrder
+	db.Where("family_id = ? AND date = ?", familyID, today).
+		Preload("Recipe").
+		Order("created_at DESC").
+		Limit(3).
+		Find(&recentOrders)
+
+	// 构建卡片的摘要文本
+	mealMap := map[string]string{"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐"}
+	var summaryParts []string
+	totalCount := int64(0)
+	for _, c := range counts {
+		name := mealMap[c.MealType]
+		if name == "" {
+			name = c.MealType
+		}
+		summaryParts = append(summaryParts, fmt.Sprintf("%s%d道", name, c.Count))
+		totalCount += c.Count
+	}
+	cardSummary := strings.Join(summaryParts, "/")
+	if cardSummary == "" {
+		cardSummary = "暂无点菜"
+	} else {
+		cardSummary = fmt.Sprintf("共%d道 %s", totalCount, cardSummary)
+	}
+
+	// 构建最近菜名摘要
+	var dishNames []string
+	for _, o := range recentOrders {
+		if o.Recipe != nil {
+			dishNames = append(dishNames, o.Recipe.Name)
+		}
+	}
+	dishSummary := strings.Join(dishNames, "、")
+	if dishSummary == "" {
+		dishSummary = "等待点菜中"
+	}
+
+	// 查找所有厨师
+	var chefs []model.FamilyMember
+	db.Where("family_id = ? AND is_chef = ?", familyID, true).
+		Preload("User").
+		Find(&chefs)
+
+	state := config.AppConfig.WeChat.MiniprogramState
+	if state == "" {
+		state = "developer"
+	}
+
+	for _, chef := range chefs {
+		if chef.User == nil || chef.User.OpenID == "" {
+			continue
+		}
+
+		data := templateData{
+			"time7":   {Value: today},
+			"thing13": {Value: truncate(cardSummary, 20)},
+			"thing14": {Value: truncate(dishSummary, 20)},
+		}
+
+		body, _ := json.Marshal(map[string]any{
+			"touser":            chef.User.OpenID,
+			"template_id":       config.AppConfig.WeChat.TemplateID,
+			"page":              "pages/order/order",
+			"miniprogram_state": state,
+			"lang":              "zh_CN",
+			"data":              data,
+		})
+
+		url := fmt.Sprintf("https://api.weixin.qq.com/wxa/set_user_notify?access_token=%s", token)
+		resp, err := http.Post(url, "application/json", bytesReader(body))
+		if err != nil {
+			log.Printf("[服务卡片] 更新失败 → chef=%s: %v", chef.User.Nickname, err)
+			continue
+		}
+
+		respBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		log.Printf("[服务卡片] set_user_notify → chef=%s summary=%s response: %s",
+			chef.User.Nickname, cardSummary, string(respBody))
+	}
+
+	log.Printf("[服务卡片] 已更新家庭 %d 的 %d 位厨师卡片 | %s", familyID, len(chefs), cardSummary)
+}
+
+// ======================== 动态消息 ========================
+
+// activityInfo 动态消息活动信息，记录 activity_id 对应的家庭和日期。
+type activityInfo struct {
+	FamilyID uint64
+	Date     string
+}
+
+// activityStore 内存中的 activity_id 映射表。
+// key: activity_id (string), value: activityInfo
+// 动态消息有效期默认 24 小时，过期后自动失效无需清理。
+var activityStore sync.Map
+
+// StoreActivity 存储 activity_id 与家庭/日期的映射关系。
+func StoreActivity(activityID string, familyID uint64, date string) {
+	activityStore.Store(activityID, activityInfo{FamilyID: familyID, Date: date})
+	log.Printf("[动态消息] 存储 activity=%s family=%d date=%s", activityID, familyID, date)
+}
+
+// CreateActivityID 调用微信 API 创建一个动态消息的 activity_id。
+//
+// 返回值：
+//   - string - activity_id（24 小时内有效）
+//   - error  - 请求失败时返回错误
+func CreateActivityID() (string, error) {
+	token, err := GetAccessToken()
+	if err != nil {
+		return "", fmt.Errorf("get token: %w", err)
+	}
+
+	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/message/wxopen/activityid/create?access_token=%s", token)
+	resp, err := http.Post(url, "application/json", nil)
+	if err != nil {
+		return "", fmt.Errorf("create activity_id: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	log.Printf("[动态消息] create activity_id response: %s", string(respBody))
+
+	var result struct {
+		ErrCode    int    `json:"errcode"`
+		ErrMsg     string `json:"errmsg"`
+		ActivityID string `json:"activity_id"`
+	}
+	json.Unmarshal(respBody, &result)
+	if result.ErrCode != 0 {
+		return "", fmt.Errorf("create activity_id error [%d]: %s", result.ErrCode, result.ErrMsg)
+	}
+
+	return result.ActivityID, nil
+}
+
+// UpdateDynamicMessages 更新指定家庭/日期下所有活跃的动态消息卡片。
+//
+// 参数：
+//   - db       *gorm.DB - 数据库连接
+//   - familyID uint64   - 家庭 ID
+//   - date     string   - 日期（YYYY-MM-DD）
+//
+// 说明：
+//   - 遍历 activityStore，找到匹配 familyID+date 的所有 activity_id
+//   - 查询当天各餐次已点菜数量作为 member_count
+//   - 查询家庭成员数作为 room_limit
+//   - 调用 updatablemsg/send 更新卡片内容
+func UpdateDynamicMessages(db *gorm.DB, familyID uint64, date string) {
+	// 统计当天总点菜数量（各餐次合计）
+	var totalOrders int64
+	db.Model(&model.DailyOrder{}).
+		Where("family_id = ? AND date = ?", familyID, date).
+		Count(&totalOrders)
+
+	// 统计家庭成员数作为 room_limit
+	var memberCount int64
+	db.Model(&model.FamilyMember{}).
+		Where("family_id = ?", familyID).
+		Count(&memberCount)
+
+	token, err := GetAccessToken()
+	if err != nil {
+		log.Printf("[动态消息] 获取token失败: %v", err)
+		return
+	}
+
+	// 遍历所有 activity_id，更新匹配的卡片
+	updatedCount := 0
+	activityStore.Range(func(key, value any) bool {
+		info := value.(activityInfo)
+		if info.FamilyID != familyID || info.Date != date {
+			return true // 不匹配，继续遍历
+		}
+
+		activityID := key.(string)
+		body, _ := json.Marshal(map[string]any{
+			"activity_id":  activityID,
+			"target_state": 0, // 0 = 进行中
+			"template_info": map[string]any{
+				"parameter_list": []map[string]string{
+					{"name": "member_count", "value": fmt.Sprintf("%d", totalOrders)},
+					{"name": "room_limit", "value": fmt.Sprintf("%d", memberCount)},
+				},
+			},
+		})
+
+		url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/message/wxopen/updatablemsg/send?access_token=%s", token)
+		resp, err := http.Post(url, "application/json", bytesReader(body))
+		if err != nil {
+			log.Printf("[动态消息] 更新失败 activity=%s: %v", activityID, err)
+			return true
+		}
+
+		respBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		log.Printf("[动态消息] 更新 activity=%s family=%d date=%s orders=%d response: %s",
+			activityID, familyID, date, totalOrders, string(respBody))
+		updatedCount++
+		return true
+	})
+
+	if updatedCount > 0 {
+		log.Printf("[动态消息] 已更新 %d 个动态卡片 | family=%d date=%s orders=%d/%d",
+			updatedCount, familyID, date, totalOrders, memberCount)
+	}
 }
 
 // truncate 截断字符串到指定字符数（rune 级别），超出部分用 "..." 替换。

@@ -69,25 +69,33 @@ func (s *AIService) Recommend(recipeNames []string, historySummary string) (stri
 
 // RecommendStructured 结构化 JSON 推荐。
 func (s *AIService) RecommendStructured(actx *AIRecommendContext, count int) (string, error) {
+	return s.recommendStructured(actx, count, "")
+}
+
+func (s *AIService) recommendStructured(actx *AIRecommendContext, count int, userHint string) (string, error) {
 	if count <= 0 {
 		count = 5
+	}
+	newMin := count
+	if newMin > 1 {
+		newMin = count - 1 // 至少 N-1 道必须是新菜
 	}
 	systemPrompt := fmt.Sprintf(`你是家庭私厨推荐助手。请根据以下上下文推荐 %d 道菜。
 
 %s
 
 要求：
-1. 优先推荐家庭菜谱中没有的新菜式（至少3道新菜）
-2. 保留1-2道用户常点的菜
-3. 考虑荤素搭配、营养均衡
+1. 【最重要】items 中每一道的 name 都必须是「家庭已有菜谱」列表里完全没有的新菜名，禁止同名或仅差一两个字的变体（如已有「番茄炒蛋」则不可推荐「西红柿炒蛋」）
+2. 至少 %d 道为全新菜式；不要推荐用户最近点过的菜，也不要把已有菜谱换个说法再推荐
+3. 考虑荤素搭配、营养均衡，菜品之间尽量不重复同类（如不要连续多道炒青菜）
 4. 结合当前天气推荐合适菜品（热天清爽、冷天暖胃、雨天汤品等）
-5. 家常简单、食材易得
+5. 家常简单、食材易得；reason 字段需说明「为什么是新菜/适合今天」
 
 必须只返回合法 JSON，不要 markdown 代码块，格式如下：
 {"items":[{"name":"菜名","category":"分类","difficulty":"easy或medium或hard","cook_time":分钟数,"ingredients":"[{\"name\":\"食材\",\"amount\":\"用量\"}]","seasonings":"[]","steps":"[\"步骤1\"]","tips":"小贴士","reason":"推荐理由"}]}
 
 注意：ingredients、seasonings、steps 字段必须是 JSON 字符串（与数据库一致），不是嵌套对象。`,
-		count, FormatContextBlock(actx))
+		count, FormatContextBlock(actx), newMin)
 
 	model := "deepseek-chat"
 	apiKey := ""
@@ -98,11 +106,15 @@ func (s *AIService) RecommendStructured(actx *AIRecommendContext, count int) (st
 		apiKey = config.AppConfig.AI.APIKey
 	}
 
+	userMsg := "请推荐家庭中从未出现的新菜，只返回 JSON"
+	if strings.TrimSpace(userHint) != "" {
+		userMsg = strings.TrimSpace(userHint) + "，只返回 JSON"
+	}
 	req := ChatRequest{
 		Model: model,
 		Messages: []ChatMessage{
 			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: "请推荐今晚吃什么，只返回 JSON"},
+			{Role: "user", Content: userMsg},
 		},
 		ResponseFormat: &struct {
 			Type string `json:"type"`

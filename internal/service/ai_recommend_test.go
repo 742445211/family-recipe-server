@@ -118,7 +118,21 @@ func TestAIRecommendServiceRecommend(t *testing.T) {
 	}
 }
 
-func TestAIRecommendMatchExistingRecipe(t *testing.T) {
+func TestFilterNewDishesOnly(t *testing.T) {
+	existing := map[string]uint64{"红烧肉": 1, "番茄炒蛋": 2}
+	inputs := []AIRecommendItemInput{
+		{Name: "红烧肉"},
+		{Name: "鱼香肉丝"},
+		{Name: "番茄炒蛋"},
+		{Name: "蒜蓉西兰花"},
+	}
+	got := filterNewDishesOnly(inputs, existing)
+	if len(got) != 2 || got[0].Name != "鱼香肉丝" || got[1].Name != "蒜蓉西兰花" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestAIRecommendFiltersExistingRecipes(t *testing.T) {
 	db := setupTestDB(t)
 	uid, fid := seedUserAndFamily(t, db)
 	existing := &model.Recipe{Name: "红烧肉", FamilyID: fid, CreatorID: uid, Ingredients: `[]`, Steps: `[]`}
@@ -126,7 +140,7 @@ func TestAIRecommendMatchExistingRecipe(t *testing.T) {
 
 	mr, _ := miniredis.Run()
 	t.Cleanup(mr.Close)
-	body := `{"items":[{"name":"红烧肉","category":"","difficulty":"easy","cook_time":20,"ingredients":"[]","seasonings":"[]","steps":"[]","tips":"","reason":"常点菜"}]}`
+	body := `{"items":[{"name":"红烧肉","category":"","difficulty":"easy","cook_time":20,"ingredients":"[]","seasonings":"[]","steps":"[]","tips":"","reason":"常点菜"},{"name":"鱼香茄子","category":"家常菜","difficulty":"easy","cook_time":15,"ingredients":"[]","seasonings":"[]","steps":"[]","tips":"","reason":"新菜"}]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + strconvQuote(body) + `}}]}`))
 	}))
@@ -144,8 +158,11 @@ func TestAIRecommendMatchExistingRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Items[0].ExistingRecipeID == nil || *result.Items[0].ExistingRecipeID != existing.ID {
-		t.Fatalf("%+v", result.Items[0])
+	if len(result.Items) != 1 || result.Items[0].Name != "鱼香茄子" {
+		t.Fatalf("%+v", result.Items)
+	}
+	if result.Items[0].ExistingRecipeID != nil {
+		t.Fatalf("新菜不应带 existing_recipe_id: %+v", result.Items[0])
 	}
 }
 

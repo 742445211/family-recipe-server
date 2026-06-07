@@ -78,6 +78,13 @@ func FormatContextBlock(ctx *AIRecommendContext) string {
 	if ctx == nil {
 		return ""
 	}
-	return fmt.Sprintf("家庭已有菜谱：%v\n历史点菜：%s\n当前天气：%s",
-		ctx.RecipeNames, FormatHistorySummary(ctx.OrderHistory), ctx.WeatherLine)
+	existing := "（暂无，可自由推荐新菜）"
+	if len(ctx.RecipeNames) > 0 {
+		existing = strings.Join(ctx.RecipeNames, "、")
+	}
+	recent := FormatHistorySummary(ctx.OrderHistory)
+	return fmt.Sprintf(
+		"家庭已有菜谱（禁止推荐以下菜名及近似菜名）：%s\n%s\n当前天气：%s",
+		existing, recent, ctx.WeatherLine,
+	)
 }

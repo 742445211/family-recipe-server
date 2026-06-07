@@ -144,7 +144,8 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 		return nil, err
 	}
 
-	inputs, err := s.fetchAIRecommendItems(actx)
+	nameToID := s.familyRecipeNameMap(familyID)
+	inputs, err := s.fetchAIRecommendItems(actx, nameToID)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +159,6 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 		rl = st
 	}
 
-	nameToID := s.familyRecipeNameMap(familyID)
 	batchID := uuid.New().String()
 	ttl := s.recommendTTL()
 	summaries := make([]AIRecommendItemSummary, 0, len(inputs))
@@ -303,26 +303,65 @@ func (s *AIRecommendService) AddOrderFromItem(ctx context.Context, itemID string
 	return s.orders.Add(familyID, recipeID, meal, userID, date, req.Note, qty)
 }
 
-func (s *AIRecommendService) fetchAIRecommendItems(actx *AIRecommendContext) ([]AIRecommendItemInput, error) {
+func (s *AIRecommendService) fetchAIRecommendItems(actx *AIRecommendContext, existing map[string]uint64) ([]AIRecommendItemInput, error) {
 	count := s.recommendCount()
-	raw, err := s.ai.RecommendStructured(actx, count)
-	if err != nil {
-		return nil, err
+	minNew := count
+	if minNew > 2 {
+		minNew = count - 1
 	}
-	inputs, parseErr := parseAIRecommendJSON(raw)
-	if parseErr == nil {
+
+	tryFetch := func(hint string) ([]AIRecommendItemInput, error) {
+		raw, err := s.ai.recommendStructured(actx, count, hint)
+		if err != nil {
+			return nil, err
+		}
+		inputs, parseErr := parseAIRecommendJSON(raw)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		return filterNewDishesOnly(inputs, existing), nil
+	}
+
+	inputs, err := tryFetch("")
+	if err == nil && len(inputs) >= minNew {
 		return inputs, nil
 	}
-	// LLM 偶发格式错误时重试一次
-	raw2, err2 := s.ai.RecommendStructured(actx, count)
-	if err2 != nil {
-		return nil, parseErr
+
+	// 解析失败、新菜不足或含大量重复时重试
+	hint := "请全部推荐家庭菜谱库和最近点菜中都没有的新菜名，不要重复已有菜"
+	inputs2, err2 := tryFetch(hint)
+	if err2 == nil && len(inputs2) > 0 {
+		return inputs2, nil
 	}
-	inputs2, parseErr2 := parseAIRecommendJSON(raw2)
-	if parseErr2 != nil {
-		return nil, fmt.Errorf("AI JSON 解析失败: %w", parseErr2)
+	if err == nil && len(inputs) > 0 {
+		return inputs, nil
 	}
-	return inputs2, nil
+	if err2 != nil && err != nil {
+		if strings.Contains(err.Error(), "AI JSON 解析失败") {
+			return nil, err2
+		}
+		return nil, err
+	}
+	return inputs2, err2
+}
+
+// filterNewDishesOnly 去掉与家庭已有菜谱同名的推荐项。
+func filterNewDishesOnly(inputs []AIRecommendItemInput, existing map[string]uint64) []AIRecommendItemInput {
+	if len(existing) == 0 {
+		return inputs
+	}
+	out := make([]AIRecommendItemInput, 0, len(inputs))
+	for _, in := range inputs {
+		name := strings.TrimSpace(in.Name)
+		if name == "" {
+			continue
+		}
+		if _, ok := existing[name]; ok {
+			continue
+		}
+		out = append(out, in)
+	}
+	return out
 }
 
 type flexibleAIRecommendItem struct {

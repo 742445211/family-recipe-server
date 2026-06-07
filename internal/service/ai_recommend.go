@@ -128,13 +128,15 @@ func (s *AIRecommendService) recommendCount() int {
 
 // Recommend 生成推荐并写入 Redis。
 func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uint64) (*AIRecommendResult, error) {
-	var rl *RateLimitStatus
 	if s.rateLimit != nil {
-		st, err := s.rateLimit.CheckAndConsume(ctx, userID)
+		st, err := s.rateLimit.Peek(ctx, userID)
 		if err != nil {
-			return &AIRecommendResult{RateLimit: st}, err
+			return nil, err
 		}
-		rl = st
+		if s.rateLimit.cfg().Enabled && st.Remaining <= 0 {
+			st.RetryAfterSec = st.ResetAfterSec
+			return &AIRecommendResult{RateLimit: st}, ErrRateLimitExceeded
+		}
 	}
 
 	actx, err := s.ctxSvc.Build(familyID)
@@ -142,13 +144,18 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 		return nil, err
 	}
 
-	raw, err := s.ai.RecommendStructured(actx, s.recommendCount())
+	inputs, err := s.fetchAIRecommendItems(actx)
 	if err != nil {
 		return nil, err
 	}
-	inputs, err := parseAIRecommendJSON(raw)
-	if err != nil {
-		return nil, err
+
+	var rl *RateLimitStatus
+	if s.rateLimit != nil {
+		st, err := s.rateLimit.CheckAndConsume(ctx, userID)
+		if err != nil {
+			return &AIRecommendResult{RateLimit: st}, err
+		}
+		rl = st
 	}
 
 	nameToID := s.familyRecipeNameMap(familyID)
@@ -296,22 +303,123 @@ func (s *AIRecommendService) AddOrderFromItem(ctx context.Context, itemID string
 	return s.orders.Add(familyID, recipeID, meal, userID, date, req.Note, qty)
 }
 
-func parseAIRecommendJSON(raw string) ([]AIRecommendItemInput, error) {
-	s := strings.TrimSpace(raw)
-	if strings.HasPrefix(s, "```") {
-		s = strings.TrimPrefix(s, "```json")
-		s = strings.TrimPrefix(s, "```")
-		s = strings.TrimSuffix(s, "```")
-		s = strings.TrimSpace(s)
+func (s *AIRecommendService) fetchAIRecommendItems(actx *AIRecommendContext) ([]AIRecommendItemInput, error) {
+	count := s.recommendCount()
+	raw, err := s.ai.RecommendStructured(actx, count)
+	if err != nil {
+		return nil, err
 	}
-	var resp aiRecommendLLMResponse
+	inputs, parseErr := parseAIRecommendJSON(raw)
+	if parseErr == nil {
+		return inputs, nil
+	}
+	// LLM 偶发格式错误时重试一次
+	raw2, err2 := s.ai.RecommendStructured(actx, count)
+	if err2 != nil {
+		return nil, parseErr
+	}
+	inputs2, parseErr2 := parseAIRecommendJSON(raw2)
+	if parseErr2 != nil {
+		return nil, fmt.Errorf("AI JSON 解析失败: %w", parseErr2)
+	}
+	return inputs2, nil
+}
+
+type flexibleAIRecommendItem struct {
+	Name        string          `json:"name"`
+	Category    string          `json:"category"`
+	Difficulty  string          `json:"difficulty"`
+	CookTime    int             `json:"cook_time"`
+	Ingredients json.RawMessage `json:"ingredients"`
+	Seasonings  json.RawMessage `json:"seasonings"`
+	Steps       json.RawMessage `json:"steps"`
+	Tips        string          `json:"tips"`
+	Reason      string          `json:"reason"`
+}
+
+type flexibleAIRecommendResponse struct {
+	Items []flexibleAIRecommendItem `json:"items"`
+}
+
+func parseAIRecommendJSON(raw string) ([]AIRecommendItemInput, error) {
+	s := extractAIJSONPayload(raw)
+	var resp flexibleAIRecommendResponse
 	if err := json.Unmarshal([]byte(s), &resp); err != nil {
 		return nil, fmt.Errorf("AI JSON 解析失败: %w", err)
 	}
 	if len(resp.Items) == 0 {
 		return nil, errors.New("AI 未返回菜品")
 	}
-	return resp.Items, nil
+	out := make([]AIRecommendItemInput, 0, len(resp.Items))
+	for _, it := range resp.Items {
+		name := strings.TrimSpace(it.Name)
+		if name == "" {
+			continue
+		}
+		out = append(out, AIRecommendItemInput{
+			Name:        name,
+			Category:    it.Category,
+			Difficulty:  it.Difficulty,
+			CookTime:    it.CookTime,
+			Ingredients: normalizeJSONArrayField(it.Ingredients),
+			Seasonings:  normalizeJSONArrayField(it.Seasonings),
+			Steps:       normalizeJSONArrayField(it.Steps),
+			Tips:        it.Tips,
+			Reason:      it.Reason,
+		})
+	}
+	if len(out) == 0 {
+		return nil, errors.New("AI 未返回有效菜品")
+	}
+	return out, nil
+}
+
+func extractAIJSONPayload(raw string) string {
+	s := strings.TrimSpace(raw)
+	if strings.HasPrefix(s, "```") {
+		s = strings.TrimPrefix(s, "```json")
+		s = strings.TrimPrefix(s, "```")
+		if idx := strings.LastIndex(s, "```"); idx >= 0 {
+			s = s[:idx]
+		}
+		s = strings.TrimSpace(s)
+	}
+	if start := strings.Index(s, "{"); start >= 0 {
+		if end := strings.LastIndex(s, "}"); end > start {
+			return s[start : end+1]
+		}
+	}
+	return s
+}
+
+// normalizeJSONArrayField 兼容 LLM 返回 JSON 字符串或数组/对象，统一为 DB 用的 JSON 字符串。
+func normalizeJSONArrayField(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "[]"
+	}
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return "[]"
+	}
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(raw, &s); err == nil {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				return "[]"
+			}
+			return s
+		}
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return "[]"
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
 }
 
 func defaultStr(s, def string) string {

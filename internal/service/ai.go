@@ -40,8 +40,11 @@ type ChatMessage struct {
 
 // ChatRequest OpenAI Chat Completion 请求体。
 type ChatRequest struct {
-	Model    string        `json:"model"`
-	Messages []ChatMessage `json:"messages"`
+	Model          string        `json:"model"`
+	Messages       []ChatMessage `json:"messages"`
+	ResponseFormat *struct {
+		Type string `json:"type"`
+	} `json:"response_format,omitempty"`
 }
 
 // ChatResponse OpenAI Chat Completion 响应体。
@@ -101,6 +104,9 @@ func (s *AIService) RecommendStructured(actx *AIRecommendContext, count int) (st
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: "请推荐今晚吃什么，只返回 JSON"},
 		},
+		ResponseFormat: &struct {
+			Type string `json:"type"`
+		}{Type: "json_object"},
 	}
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequest(http.MethodPost, s.baseURL+"/v1/chat/completions", bytes.NewReader(body))

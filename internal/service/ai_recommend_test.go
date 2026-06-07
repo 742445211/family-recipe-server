@@ -26,6 +26,34 @@ func TestParseAIRecommendJSON(t *testing.T) {
 	}
 }
 
+func TestParseAIRecommendJSONWithJSONArrayFields(t *testing.T) {
+	raw := `{"items":[{"name":"番茄炒蛋","category":"家常菜","difficulty":"easy","cook_time":15,"ingredients":[{"name":"番茄","amount":"2个"},{"name":"鸡蛋","amount":"3个"}],"seasonings":[],"steps":["打蛋","番茄切块","合炒"],"tips":"少油","reason":"快手"}]}`
+	items, err := parseAIRecommendJSON(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items=%d", len(items))
+	}
+	if !strings.Contains(items[0].Ingredients, "番茄") {
+		t.Fatalf("ingredients=%s", items[0].Ingredients)
+	}
+	if !strings.Contains(items[0].Steps, "打蛋") {
+		t.Fatalf("steps=%s", items[0].Steps)
+	}
+}
+
+func TestParseAIRecommendJSONStepsWithColon(t *testing.T) {
+	raw := `{"items":[{"name":"红烧排骨","category":"荤菜","difficulty":"medium","cook_time":40,"ingredients":[{"name":"排骨","amount":"500g"}],"seasonings":[],"steps":["焯水: 去血沫","炒糖色: 小火","炖煮: 40分钟"],"tips":"","reason":"暖胃"}]}`
+	items, err := parseAIRecommendJSON(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if items[0].Name != "红烧排骨" {
+		t.Fatalf("%+v", items[0])
+	}
+}
+
 func TestParseAIRecommendJSONStripsMarkdown(t *testing.T) {
 	raw := "```json\n{\"items\":[{\"name\":\"A\",\"category\":\"\",\"difficulty\":\"easy\",\"cook_time\":10,\"ingredients\":\"[]\",\"seasonings\":\"[]\",\"steps\":\"[]\",\"tips\":\"\",\"reason\":\"\"}]}\n```"
 	items, err := parseAIRecommendJSON(raw)

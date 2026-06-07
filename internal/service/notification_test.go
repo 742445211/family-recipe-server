@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"recipe-server/internal/model"
 
@@ -10,7 +11,6 @@ import (
 
 func seedChefOrder(t *testing.T, db *gorm.DB) (orderID uint64, chefID uint64) {
 	t.Helper()
-	initTestConfig()
 
 	adder := model.User{OpenID: "adder-oid", Nickname: "点菜人"}
 	chef := model.User{OpenID: "chef-oid", Nickname: "厨师"}
@@ -33,7 +33,15 @@ func seedChefOrder(t *testing.T, db *gorm.DB) (orderID uint64, chefID uint64) {
 	return order.ID, chef.ID
 }
 
+func waitNotificationAsync(t *testing.T) {
+	t.Helper()
+	time.Sleep(200 * time.Millisecond)
+}
+
 func TestNotifyOrderCreatedCreatesNotification(t *testing.T) {
+	initTestConfig()
+	requireNotificationEnabled(t)
+
 	db := setupTestDB(t)
 	orderID, chefID := seedChefOrder(t, db)
 	hub := NewWebSocketHub()
@@ -63,6 +71,9 @@ func TestNotifyOrderCreatedCreatesNotification(t *testing.T) {
 }
 
 func TestNotifyOrderCreatedIdempotent(t *testing.T) {
+	initTestConfig()
+	requireNotificationEnabled(t)
+
 	db := setupTestDB(t)
 	orderID, chefID := seedChefOrder(t, db)
 	hub := NewWebSocketHub()
@@ -70,6 +81,7 @@ func TestNotifyOrderCreatedIdempotent(t *testing.T) {
 
 	_ = svc.NotifyOrderCreated(orderID)
 	_ = svc.NotifyOrderCreated(orderID)
+	waitNotificationAsync(t)
 
 	var count int64
 	db.Model(&model.Notification{}).Where("order_id = ? AND receiver_user_id = ?", orderID, chefID).Count(&count)
@@ -79,8 +91,9 @@ func TestNotifyOrderCreatedIdempotent(t *testing.T) {
 }
 
 func TestNotifyOrderCreatedNoChef(t *testing.T) {
-	db := setupTestDB(t)
 	initTestConfig()
+
+	db := setupTestDB(t)
 	userID, familyID := seedUserAndFamily(t, db)
 	recipe := model.Recipe{Name: "番茄炒蛋", CreatorID: userID, FamilyID: familyID}
 	db.Create(&recipe)
@@ -99,12 +112,35 @@ func TestNotifyOrderCreatedNoChef(t *testing.T) {
 	}
 }
 
+func TestNotifyOrderCreatedSkipsWhenDisabled(t *testing.T) {
+	initTestConfigNotification(false)
+
+	db := setupTestDB(t)
+	orderID, chefID := seedChefOrder(t, db)
+	hub := NewWebSocketHub()
+	svc := NewNotificationService(db, hub)
+
+	if err := svc.NotifyOrderCreated(orderID); err != nil {
+		t.Fatalf("NotifyOrderCreated: %v", err)
+	}
+
+	var count int64
+	db.Model(&model.Notification{}).Where("order_id = ? AND receiver_user_id = ?", orderID, chefID).Count(&count)
+	if count != 0 {
+		t.Errorf("notification.enabled=false 时不应创建通知, got %d", count)
+	}
+}
+
 func TestListUnreadAndMarkRead(t *testing.T) {
+	initTestConfig()
+	requireNotificationEnabled(t)
+
 	db := setupTestDB(t)
 	orderID, chefID := seedChefOrder(t, db)
 	hub := NewWebSocketHub()
 	svc := NewNotificationService(db, hub)
 	_ = svc.NotifyOrderCreated(orderID)
+	waitNotificationAsync(t)
 
 	list, err := svc.ListUnread(chefID)
 	if err != nil {

@@ -7,12 +7,15 @@ import (
 )
 
 func TestPendingWebSocketNotificationsExcludesSent(t *testing.T) {
-	db := setupTestDB(t)
 	initTestConfig()
+	requireNotificationEnabled(t)
+
+	db := setupTestDB(t)
 	orderID, chefID := seedChefOrder(t, db)
 
 	svc := NewNotificationService(db, NewWebSocketHub())
 	_ = svc.NotifyOrderCreated(orderID)
+	waitNotificationAsync(t)
 
 	var n model.Notification
 	db.Where("order_id = ? AND receiver_user_id = ?", orderID, chefID).First(&n)
@@ -33,16 +36,17 @@ func TestPendingWebSocketNotificationsExcludesSent(t *testing.T) {
 }
 
 func TestMarkWebSocketDeliverySentUpdatesSkipped(t *testing.T) {
-	db := setupTestDB(t)
 	initTestConfig()
-	orderID, chefID := seedChefOrder(t, db)
-	_ = chefID
 
-	svc := NewNotificationService(db, NewWebSocketHub())
-	_ = svc.NotifyOrderCreated(orderID)
+	db := setupTestDB(t)
+	orderID, _ := seedChefOrder(t, db)
 
-	var n model.Notification
-	db.Where("order_id = ?", orderID).First(&n)
+	n := model.Notification{
+		FamilyID: 1, ReceiverUserID: 2, OrderID: orderID,
+		Type: model.NotificationTypeOrderCreated, Title: "t", Content: "c",
+		Status: model.NotificationStatusUnread,
+	}
+	db.Create(&n)
 	d := model.NotificationDelivery{
 		NotificationID: n.ID,
 		Channel:        model.ChannelWebSocket,
@@ -52,6 +56,7 @@ func TestMarkWebSocketDeliverySentUpdatesSkipped(t *testing.T) {
 	}
 	db.Create(&d)
 
+	svc := NewNotificationService(db, NewWebSocketHub())
 	svc.markWebSocketDeliverySent(n.ID)
 
 	var updated model.NotificationDelivery

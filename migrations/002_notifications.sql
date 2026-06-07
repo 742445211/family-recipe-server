@@ -52,5 +52,18 @@ CREATE TABLE IF NOT EXISTS notification_channels (
   INDEX idx_user_channel (user_id, channel)
 ) ENGINE=InnoDB;
 
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS wecom_userid VARCHAR(64) DEFAULT '' AFTER avatar_url;
+SET @col_exists := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'users'
+    AND COLUMN_NAME = 'wecom_userid'
+);
+SET @ddl := IF(
+  @col_exists = 0,
+  'ALTER TABLE users ADD COLUMN wecom_userid VARCHAR(64) DEFAULT '''' AFTER avatar_url',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

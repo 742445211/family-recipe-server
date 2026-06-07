@@ -35,9 +35,6 @@ func (n *ServerChanNotifier) Send(ctx context.Context, msg NotificationMessage, 
 	base := trimSlash(config.AppConfig.Notification.ServerChan.APIBase)
 	apiURL := fmt.Sprintf("%s/%s.send", base, sendKey)
 	desp := BuildOrderContent(msg)
-	if msg.Note != "" {
-		desp += "\n备注：" + msg.Note
-	}
 	form := url.Values{}
 	form.Set("title", msg.Title)
 	form.Set("desp", desp)

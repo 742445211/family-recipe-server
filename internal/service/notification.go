@@ -24,7 +24,7 @@ type NotificationService struct {
 // NewNotificationService 创建通知服务。
 func NewNotificationService(db *gorm.DB, hub *WebSocketHub) *NotificationService {
 	cfg := config.AppConfig.Notification
-	mpToken := wechattoken.NewMiniProgramToken()
+	mpToken := wechattoken.SharedMiniProgramToken()
 	wecomToken := wechattoken.NewWecomToken()
 
 	n := &NotificationService{
@@ -71,17 +71,26 @@ func (s *NotificationService) NotifyOrderCreated(orderID uint64) error {
 	}
 
 	recipeName := ""
+	ingredients := ""
 	if order.Recipe != nil {
 		recipeName = order.Recipe.Name
+		ingredients = order.Recipe.Ingredients
 	}
 	adderName := ""
 	if order.Adder != nil {
 		adderName = order.Adder.Nickname
 	}
 
-	meal := notifier.MealName(order.MealType)
 	title := "有新的点菜"
-	content := meal + "新增：" + recipeName + " 1份，点菜人：" + adderName
+	msgBase := notifier.NotificationMessage{
+		RecipeName:  recipeName,
+		AdderName:   adderName,
+		MealType:    order.MealType,
+		Date:        order.Date,
+		Note:        order.Note,
+		Ingredients: ingredients,
+	}
+	content := notifier.BuildOrderContent(msgBase)
 
 	chSvc := NewNotificationChannelService(s.db)
 
@@ -107,6 +116,7 @@ func (s *NotificationService) NotifyOrderCreated(orderID uint64) error {
 			Date:           order.Date,
 			OpenID:         chef.User.OpenID,
 			Note:           order.Note,
+			Ingredients:    ingredients,
 		}
 
 		targets := chSvc.GetEnabledTargets(chef.UserID, chef.User)

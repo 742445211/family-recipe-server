@@ -29,16 +29,9 @@ import (
 
 	"recipe-server/config"
 	"recipe-server/internal/model"
+	"recipe-server/internal/service/wechattoken"
 
 	"gorm.io/gorm"
-)
-
-// 全局 access_token 缓存变量。
-// 使用 sync.Mutex 保证并发安全，tokenExpireAt 记录过期时间。
-var (
-	accessToken   string       // 缓存的 access_token
-	tokenExpireAt time.Time    // token 过期时间
-	tokenMu       sync.Mutex   // 保护并发读写的互斥锁
 )
 
 // GetAccessToken 获取微信公众号/小程序的全局唯一接口调用凭据 access_token，带内存缓存。
@@ -67,46 +60,7 @@ var (
 //   - 提前 5 分钟（300 秒）标记过期，避免在高并发时使用即将过期的 token
 //   - 返回值在项目其他函数（如 SendOrderNotify）中通过 Authorization 头传递
 func GetAccessToken() (string, error) {
-	tokenMu.Lock()
-	defer tokenMu.Unlock()
-
-	// 检查缓存：如果 token 存在且未到过期时间（提前 5 分钟），直接返回
-	if accessToken != "" && time.Now().Before(tokenExpireAt) {
-		return accessToken, nil
-	}
-
-	// 缓存失效，请求微信 API 获取新 token
-	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s",
-		config.AppConfig.WeChat.AppID, config.AppConfig.WeChat.Secret)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("get access_token: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// 读取并解析响应体
-	body, _ := io.ReadAll(resp.Body)
-	var result struct {
-		AccessToken string `json:"access_token"` // 获取到的凭证
-		ExpiresIn   int    `json:"expires_in"`   // 凭证有效时间（单位：秒）
-		ErrCode     int    `json:"errcode"`      // 错误码
-		ErrMsg      string `json:"errmsg"`       // 错误信息
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("parse access_token: %w", err)
-	}
-
-	// 检查微信业务错误
-	if result.ErrCode != 0 {
-		return "", fmt.Errorf("get access_token error: %s", result.ErrMsg)
-	}
-
-	// 缓存新 token 及过期时间（提前 5 分钟过期，安全余量）
-	accessToken = result.AccessToken
-	tokenExpireAt = time.Now().Add(time.Duration(result.ExpiresIn-300) * time.Second)
-
-	return accessToken, nil
+	return wechattoken.SharedMiniProgramToken().GetAccessToken()
 }
 
 // templateData 微信订阅消息模板数据字段映射。
@@ -363,6 +317,10 @@ func StoreActivity(activityID string, familyID uint64, date string) {
 //   - string - activity_id（24 小时内有效）
 //   - error  - 请求失败时返回错误
 func CreateActivityID() (string, error) {
+	return createActivityIDOnce(false)
+}
+
+func createActivityIDOnce(retried bool) (string, error) {
 	token, err := GetAccessToken()
 	if err != nil {
 		return "", fmt.Errorf("get token: %w", err)
@@ -384,6 +342,10 @@ func CreateActivityID() (string, error) {
 		ActivityID string `json:"activity_id"`
 	}
 	json.Unmarshal(respBody, &result)
+	if result.ErrCode == 40001 && !retried {
+		wechattoken.InvalidateSharedMiniProgramToken()
+		return createActivityIDOnce(true)
+	}
 	if result.ErrCode != 0 {
 		return "", fmt.Errorf("create activity_id error [%d]: %s", result.ErrCode, result.ErrMsg)
 	}

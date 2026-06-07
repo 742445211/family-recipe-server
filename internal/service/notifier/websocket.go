@@ -40,12 +40,15 @@ func (n *WebSocketNotifier) Send(ctx context.Context, msg NotificationMessage, t
 // BuildOrderCreatedPayload 构造点菜 WebSocket 推送 JSON 体。
 func BuildOrderCreatedPayload(msg NotificationMessage) map[string]any {
 	payload := map[string]any{
-		"type":      "ORDER_CREATED",
-		"title":     msg.Title,
-		"content":   msg.Content,
-		"order_id":  msg.OrderID,
-		"date":      msg.Date,
-		"meal_type": msg.MealType,
+		"type":        "ORDER_CREATED",
+		"title":       msg.Title,
+		"content":     msg.Content,
+		"order_id":    msg.OrderID,
+		"date":        msg.Date,
+		"meal_type":   msg.MealType,
+		"recipe_name": msg.RecipeName,
+		"adder_name":  msg.AdderName,
+		"ingredients": FormatIngredients(msg.Ingredients),
 	}
 	if msg.NotificationID > 0 {
 		payload["notification_id"] = msg.NotificationID

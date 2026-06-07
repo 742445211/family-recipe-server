@@ -1,0 +1,42 @@
+---
+description: 部署流程：先本地改代码并 git 提交，再服务器 git 拉取后编译重启
+alwaysApply: true
+---
+
+# 部署工作流（强制）
+
+任何需要上线到生产服务器（47.109.195.81 / www.zzzjc.xin）的改动，**必须**按以下顺序执行，禁止跳过或颠倒：
+
+## 1. 本地修改
+
+- 在本地工作区完成代码改动
+- 本地 `go build` / `go test` 验证（至少跑相关包测试）
+
+## 2. Git 提交并推送
+
+- `git add` 只包含源码与配置示例，**勿提交** `config.yaml` 密钥、`recipe-server.exe`、`.env` 等
+- `git commit` 写清改动目的
+- `git push` 到远程（`origin/master`）
+
+## 3. 服务器更新并重启
+
+服务器项目路径：`/root/projects/recipe-server`
+
+```bash
+cd /root/projects/recipe-server
+git pull origin master   # 或 git pull
+export GOPROXY=https://goproxy.cn,direct CGO_ENABLED=1
+go build -o recipe-server .
+systemctl restart recipe-server
+systemctl is-active recipe-server
+```
+
+## 禁止的做法
+
+- **禁止**用 SFTP/scp 直接上传单个文件代替 git 同步（紧急热修除外，且事后必须补 commit + pull）
+- **禁止**只改服务器不提交本地
+- **禁止**未 push 就在服务器 `git pull`（会拉不到新代码）
+
+## 环境变量
+
+SSH 密码通过 `REMOTE_PASSWORD` 环境变量传入，不要写进仓库脚本默认值。

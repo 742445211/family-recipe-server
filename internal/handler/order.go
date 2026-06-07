@@ -187,7 +187,7 @@ func (h *OrderHandler) Remove(c *gin.Context) {
 func (h *OrderHandler) Share(c *gin.Context) {
 	activityID, err := service.CreateActivityID()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建分享失败"})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建分享失败: " + err.Error()})
 		return
 	}
 

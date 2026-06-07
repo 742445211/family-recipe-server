@@ -90,6 +90,10 @@ go test ./... -count=1
 
 ## 部署
 
+**强制流程**：本地改代码 → `git commit` + `git push` → 服务器 `git pull` → `go build` → `systemctl restart recipe-server`
+
+- 服务器路径：`/root/projects/recipe-server`（systemd 服务名 `recipe-server`）
+- 禁止 SFTP 直传文件代替 git 同步（紧急热修后须补提交）
 - Ubuntu 24.04 步骤见前端仓库 `docs/deploy-ubuntu-24.04.md`
 - 迁移：`migrations/002_notifications.sql` + GORM `AutoMigrate`
 - Nginx 必须为 `/api/ws` 配置 WebSocket `Upgrade` 头

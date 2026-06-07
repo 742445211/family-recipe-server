@@ -1,9 +1,45 @@
 package notifier
 
 import (
+	"encoding/json"
 	"io"
 	"strings"
 )
+
+type ingredientItem struct {
+	Name   string `json:"name"`
+	Amount string `json:"amount"`
+}
+
+// FormatIngredients 将菜谱 ingredients JSON 格式化为「番茄2个、鸡蛋3个」。
+func FormatIngredients(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" || raw == "null" {
+		return ""
+	}
+	var items []ingredientItem
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		var strs []string
+		if err2 := json.Unmarshal([]byte(raw), &strs); err2 != nil {
+			return ""
+		}
+		return strings.Join(strs, "、")
+	}
+	parts := make([]string, 0, len(items))
+	for _, it := range items {
+		name := strings.TrimSpace(it.Name)
+		if name == "" {
+			continue
+		}
+		amount := strings.TrimSpace(it.Amount)
+		if amount != "" {
+			parts = append(parts, name+amount)
+		} else {
+			parts = append(parts, name)
+		}
+	}
+	return strings.Join(parts, "、")
+}
 
 func truncateRunes(s string, max int) string {
 	runes := []rune(s)

@@ -29,6 +29,25 @@ func NewMiniProgramToken() *MiniProgramToken {
 	return &MiniProgramToken{client: &http.Client{}}
 }
 
+var sharedMiniProgram = NewMiniProgramToken()
+
+// SharedMiniProgramToken 进程内唯一小程序 token 缓存（避免多处各自刷新导致 40001）。
+func SharedMiniProgramToken() Provider {
+	return sharedMiniProgram
+}
+
+// InvalidateSharedMiniProgramToken 清除共享 token，供 40001 后强制刷新。
+func InvalidateSharedMiniProgramToken() {
+	sharedMiniProgram.Invalidate()
+}
+
+func (m *MiniProgramToken) Invalidate() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.token = ""
+	m.expires = time.Time{}
+}
+
 func (m *MiniProgramToken) GetAccessToken() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -115,7 +115,7 @@ func (s *NotificationService) NotifyOrderCreated(orderID uint64) error {
 			RecipeName:     recipeName,
 			AdderName:      adderName,
 			MealType:       order.MealType,
-			Date:           order.Date,
+			Date:           orderDate,
 			OpenID:         chef.User.OpenID,
 			Note:           order.Note,
 			Ingredients:    ingredients,
@@ -310,7 +310,7 @@ func (s *NotificationService) FlushUnreadWebSocket(userID uint64) {
 			Title:          n.Title,
 			Content:        n.Content,
 			OrderID:        n.OrderID,
-			Date:           order.Date,
+			Date:           dateutil.FormatYMD(order.Date),
 			MealType:       order.MealType,
 		}
 		if s.hub.PushToUser(userID, notifier.BuildOrderCreatedPayload(msg)) {

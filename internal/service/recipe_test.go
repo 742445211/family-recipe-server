@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"recipe-server/config"
 	"recipe-server/internal/model"
 
 	"gorm.io/driver/sqlite"
@@ -22,8 +23,32 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&model.Recipe{},
 		&model.DailyOrder{},
 		&model.Favorite{},
+		&model.Notification{},
+		&model.NotificationDelivery{},
+		&model.NotificationChannel{},
 	)
 	return db
+}
+
+func initTestConfig() {
+	if config.AppConfig == nil {
+		_ = config.Load("../../config.yaml")
+	}
+	if config.AppConfig == nil {
+		config.AppConfig = &config.Config{
+			Notification: config.NotificationConfig{
+				Enabled: true,
+				WebSocket: config.NotificationWebSocket{Enabled: true},
+				WeChatSubscribe: config.NotificationWxSub{
+					Enabled:    true,
+					TemplateID: "test-template",
+				},
+				Worker: config.NotificationWorker{Enabled: false},
+			},
+			JWT: config.JWTConfig{Secret: "test-secret", ExpireHours: 24},
+			WeChat: config.WeChatConfig{AppID: "test", Secret: "test"},
+		}
+	}
 }
 
 func seedUserAndFamily(t *testing.T, db *gorm.DB) (uint64, uint64) {

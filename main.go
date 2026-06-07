@@ -11,6 +11,7 @@ import (
 	"recipe-server/internal/handler"
 	"recipe-server/internal/middleware"
 	"recipe-server/internal/model"
+	"recipe-server/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
@@ -38,7 +39,19 @@ func main() {
 		&model.Recipe{},
 		&model.DailyOrder{},
 		&model.Favorite{},
+		&model.Notification{},
+		&model.NotificationDelivery{},
+		&model.NotificationChannel{},
 	)
+
+	wsHub := service.NewWebSocketHub()
+	notifySvc := service.NewNotificationService(db, wsHub)
+	wsHub.SetOnConnect(func(userID uint64) {
+		notifySvc.FlushUnreadWebSocket(userID)
+	})
+	if config.AppConfig.Notification.Worker.Enabled {
+		notifySvc.StartRetryWorker()
+	}
 
 	// 4. 创建 Gin 路由引擎（带默认中间件：Logger + Recovery）
 	r := gin.Default()
@@ -80,11 +93,21 @@ func main() {
 			auth.POST("/recipes/:id/cooked", recipeH.Cooked) // 标记已烹饪
 
 			// 每日点菜
-			orderH := handler.NewOrderHandler(db)
+			orderH := handler.NewOrderHandler(db, wsHub)
 			auth.GET("/orders", orderH.List)         // 查看点菜列表
 			auth.POST("/orders", orderH.Add)         // 点一道菜
 			auth.DELETE("/orders/:id", orderH.Remove) // 取消点菜
 			auth.POST("/orders/share", orderH.Share) // 创建动态消息分享
+
+			// 厨师通知
+			notifyH := handler.NewNotificationHandler(db, wsHub)
+			auth.GET("/notifications/unread", notifyH.ListUnread)
+			auth.POST("/notifications/:id/read", notifyH.MarkRead)
+			chH := handler.NewNotificationChannelHandler(db)
+			auth.GET("/notification-channels", chH.List)
+			auth.POST("/notification-channels", chH.Create)
+			auth.PUT("/notification-channels/:id", chH.Update)
+			auth.DELETE("/notification-channels/:id", chH.Delete)
 
 			// 收藏
 			favH := handler.NewFavoriteHandler(db)
@@ -101,6 +124,13 @@ func main() {
 			auth.POST("/ai/recommend", aiH.Recommend)
 		}
 	}
+
+	// WebSocket（需 JWT query token）
+	wsPath := config.AppConfig.Notification.WebSocket.Path
+	if wsPath == "" {
+		wsPath = "/api/ws"
+	}
+	r.GET(wsPath, wsHub.HandleWebSocket)
 
 	// 启动 HTTP 服务器
 	addr := fmt.Sprintf(":%d", config.AppConfig.Server.Port)

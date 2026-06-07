@@ -149,8 +149,10 @@ type templateData map[string]struct {
 //   - 订阅消息需要用户在小程序端授权后方可推送
 //   - 消息内容字段需符合微信模板定义（thing 类型最多 20 字符）
 func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error {
-	// 未配置模板 ID 时静默跳过（服务器可能暂不需要消息推送能力）
-	if config.AppConfig.WeChat.TemplateID == "" {
+	if config.AppConfig == nil || !config.AppConfig.WeChatSubscribeConfigured() {
+		return nil
+	}
+	if strings.TrimSpace(openid) == "" {
 		return nil
 	}
 
@@ -182,7 +184,7 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 	}
 	body, _ := json.Marshal(map[string]any{
 		"touser":            openid,                                   // 接收者的 OpenID
-		"template_id":       config.AppConfig.WeChat.TemplateID,      // 订阅消息模板 ID
+		"template_id":       config.AppConfig.EffectiveTemplateID(),  // 订阅消息模板 ID
 		"page":              "pages/order/order",                      // 点击消息跳转的小程序页面
 		"miniprogram_state": state,                                    // 跳转小程序类型
 		"lang":              "zh_CN",                                   // 语言
@@ -200,7 +202,7 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 	// 解析响应体检查微信业务错误码
 	respBody, _ := io.ReadAll(resp.Body)
 	log.Printf("[微信API] subscribe/send → openid=%s template=%s response: %s",
-		openid, config.AppConfig.WeChat.TemplateID, string(respBody))
+		openid, config.AppConfig.EffectiveTemplateID(), string(respBody))
 	var result struct {
 		ErrCode int    `json:"errcode"`
 		ErrMsg  string `json:"errmsg"`
@@ -226,7 +228,7 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 //   - 卡片摘要格式："早餐2道/午餐3道/晚餐5道"
 //   - 未配置 TemplateID 时静默跳过
 func UpdateChefServiceCard(db *gorm.DB, familyID uint64) {
-	if config.AppConfig.WeChat.TemplateID == "" {
+	if config.AppConfig == nil || !config.AppConfig.WeChatSubscribeConfigured() {
 		return
 	}
 
@@ -402,6 +404,10 @@ func CreateActivityID() (string, error) {
 //   - 查询家庭成员数作为 room_limit
 //   - 调用 updatablemsg/send 更新卡片内容
 func UpdateDynamicMessages(db *gorm.DB, familyID uint64, date string) {
+	if config.AppConfig == nil || !config.AppConfig.WeChatConfigured() {
+		return
+	}
+
 	// 统计当天总点菜数量（各餐次合计）
 	var totalOrders int64
 	db.Model(&model.DailyOrder{}).

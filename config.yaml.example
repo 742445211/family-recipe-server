@@ -1,0 +1,76 @@
+server:
+  port: 8080
+  mode: release
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: "CHANGE_ME"
+  database: recipe_app
+
+jwt:
+  secret: "CHANGE_ME"
+  expire_hours: 720
+
+wechat:
+  appid: "YOUR_MINIAPP_APPID"
+  secret: "YOUR_MINIAPP_SECRET"
+
+oss:
+  endpoint: "oss-cn-xxx.aliyuncs.com"
+  access_key_id: ""
+  access_key_secret: ""
+  bucket: ""
+  region: "cn-hangzhou"
+  custom_domain: ""
+
+ai:
+  api_key: ""
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-chat"
+
+notification:
+  enabled: true
+  retry:
+    max_attempts: 3
+    intervals_sec: [60, 300, 900]
+
+  websocket:
+    enabled: true
+    path: "/api/ws"
+    ping_interval_sec: 30
+    read_timeout_sec: 60
+
+  wechat_subscribe:
+    enabled: true
+    template_id: "YOUR_TEMPLATE_ID"
+    miniprogram_state: "formal"
+    page: "pages/order/order"
+
+  wecom_workbench:
+    enabled: true
+    corp_id: "YOUR_CORP_ID"
+    agent_id: 1000002
+    secret: "YOUR_AGENT_SECRET"
+    api_base: "https://qyapi.weixin.qq.com"
+    msg_type: "text"
+    duplicate_check_interval: 1800
+
+  server_chan:
+    enabled: true
+    api_base: "https://sctapi.ftqq.com"
+
+  bark:
+    enabled: true
+    default_endpoint: "https://api.day.app"
+
+  ntfy:
+    enabled: true
+    default_endpoint: "https://ntfy.sh"
+    default_priority: "high"
+    default_tags: "cooking,food"
+
+  worker:
+    enabled: true
+    poll_interval_sec: 30

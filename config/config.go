@@ -6,18 +6,20 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Config 全局应用配置，对应 config.yaml 顶层结构。
 type Config struct {
-	Server ServerConfig `yaml:"server"` // 服务器配置
-	MySQL  MySQLConfig  `yaml:"mysql"`  // MySQL 数据库配置
-	JWT    JWTConfig    `yaml:"jwt"`    // JWT 认证配置
-	WeChat WeChatConfig `yaml:"wechat"` // 微信小程序配置
-	OSS    OSSConfig    `yaml:"oss"`     // 阿里云 OSS 配置
-	AI     AIConfig     `yaml:"ai"`      // AI 服务配置
+	Server       ServerConfig       `yaml:"server"`       // 服务器配置
+	MySQL        MySQLConfig        `yaml:"mysql"`        // MySQL 数据库配置
+	JWT          JWTConfig          `yaml:"jwt"`          // JWT 认证配置
+	WeChat       WeChatConfig       `yaml:"wechat"`       // 微信小程序配置
+	OSS          OSSConfig          `yaml:"oss"`          // 阿里云 OSS 配置
+	AI           AIConfig           `yaml:"ai"`           // AI 服务配置
+	Notification NotificationConfig `yaml:"notification"` // 厨师通知配置
 }
 
 // ServerConfig HTTP 服务器配置。
@@ -72,6 +74,113 @@ type AIConfig struct {
 	Model   string `yaml:"model"`    // 模型名称
 }
 
+// NotificationConfig 厨师点菜通知总配置。
+type NotificationConfig struct {
+	Enabled          bool                   `yaml:"enabled"`
+	Retry            NotificationRetry      `yaml:"retry"`
+	WebSocket        NotificationWebSocket  `yaml:"websocket"`
+	WeChatSubscribe  NotificationWxSub      `yaml:"wechat_subscribe"`
+	WecomWorkbench   NotificationWecom      `yaml:"wecom_workbench"`
+	ServerChan       NotificationServerChan `yaml:"server_chan"`
+	Bark             NotificationBark       `yaml:"bark"`
+	Ntfy             NotificationNtfy       `yaml:"ntfy"`
+	Worker           NotificationWorker     `yaml:"worker"`
+}
+
+// NotificationRetry 外部通道重试策略。
+type NotificationRetry struct {
+	MaxAttempts   int   `yaml:"max_attempts"`
+	IntervalsSec  []int `yaml:"intervals_sec"`
+}
+
+// NotificationWebSocket WebSocket 实时通知配置。
+type NotificationWebSocket struct {
+	Enabled          bool   `yaml:"enabled"`
+	Path             string `yaml:"path"`
+	PingIntervalSec  int    `yaml:"ping_interval_sec"`
+	ReadTimeoutSec   int    `yaml:"read_timeout_sec"`
+}
+
+// NotificationWxSub 微信一次性订阅消息配置。
+type NotificationWxSub struct {
+	Enabled          bool   `yaml:"enabled"`
+	TemplateID       string `yaml:"template_id"`
+	MiniprogramState string `yaml:"miniprogram_state"`
+	Page             string `yaml:"page"`
+}
+
+// NotificationWecom 企业微信微工作台应用消息配置。
+type NotificationWecom struct {
+	Enabled                bool   `yaml:"enabled"`
+	CorpID                 string `yaml:"corp_id"`
+	AgentID                int    `yaml:"agent_id"`
+	Secret                 string `yaml:"secret"`
+	APIBase                string `yaml:"api_base"`
+	MsgType                string `yaml:"msg_type"`
+	DuplicateCheckInterval int    `yaml:"duplicate_check_interval"`
+}
+
+// NotificationServerChan Server酱配置。
+type NotificationServerChan struct {
+	Enabled bool   `yaml:"enabled"`
+	APIBase string `yaml:"api_base"`
+}
+
+// NotificationBark Bark 推送配置。
+type NotificationBark struct {
+	Enabled         bool   `yaml:"enabled"`
+	DefaultEndpoint string `yaml:"default_endpoint"`
+}
+
+// NotificationNtfy ntfy 推送配置。
+type NotificationNtfy struct {
+	Enabled         bool   `yaml:"enabled"`
+	DefaultEndpoint string `yaml:"default_endpoint"`
+	DefaultPriority string `yaml:"default_priority"`
+	DefaultTags     string `yaml:"default_tags"`
+}
+
+// NotificationWorker delivery 重试 worker 配置。
+type NotificationWorker struct {
+	Enabled         bool `yaml:"enabled"`
+	PollIntervalSec int  `yaml:"poll_interval_sec"`
+}
+
+// WeChatConfigured 小程序 AppID / Secret 是否已配置。
+func (c *Config) WeChatConfigured() bool {
+	if c == nil {
+		return false
+	}
+	return strings.TrimSpace(c.WeChat.AppID) != "" && strings.TrimSpace(c.WeChat.Secret) != ""
+}
+
+// WeChatSubscribeConfigured 微信订阅消息通道是否具备发送条件。
+func (c *Config) WeChatSubscribeConfigured() bool {
+	if c == nil || !c.Notification.WeChatSubscribe.Enabled {
+		return false
+	}
+	return c.WeChatConfigured() && c.EffectiveTemplateID() != ""
+}
+
+// EffectiveTemplateID 返回订阅消息模板 ID（notification 块优先，兼容 wechat 块）。
+func (c *Config) EffectiveTemplateID() string {
+	if c.Notification.WeChatSubscribe.TemplateID != "" {
+		return c.Notification.WeChatSubscribe.TemplateID
+	}
+	return c.WeChat.TemplateID
+}
+
+// EffectiveMiniprogramState 返回小程序跳转版本。
+func (c *Config) EffectiveMiniprogramState() string {
+	if c.Notification.WeChatSubscribe.MiniprogramState != "" {
+		return c.Notification.WeChatSubscribe.MiniprogramState
+	}
+	if c.WeChat.MiniprogramState != "" {
+		return c.WeChat.MiniprogramState
+	}
+	return "developer"
+}
+
 // AppConfig 全局配置实例，在 Load 后可用。
 var AppConfig *Config
 
@@ -103,5 +212,55 @@ func Load(path string) error {
 	if AppConfig.Server.Mode == "" {
 		AppConfig.Server.Mode = "debug"
 	}
+	applyNotificationDefaults(AppConfig)
 	return nil
+}
+
+func applyNotificationDefaults(c *Config) {
+	n := &c.Notification
+	if n.WebSocket.Path == "" {
+		n.WebSocket.Path = "/api/ws"
+	}
+	if n.WebSocket.PingIntervalSec == 0 {
+		n.WebSocket.PingIntervalSec = 30
+	}
+	if n.WebSocket.ReadTimeoutSec == 0 {
+		n.WebSocket.ReadTimeoutSec = 60
+	}
+	if n.Retry.MaxAttempts == 0 {
+		n.Retry.MaxAttempts = 3
+	}
+	if len(n.Retry.IntervalsSec) == 0 {
+		n.Retry.IntervalsSec = []int{60, 300, 900}
+	}
+	if n.WecomWorkbench.APIBase == "" {
+		n.WecomWorkbench.APIBase = "https://qyapi.weixin.qq.com"
+	}
+	if n.WecomWorkbench.MsgType == "" {
+		n.WecomWorkbench.MsgType = "text"
+	}
+	if n.WecomWorkbench.DuplicateCheckInterval == 0 {
+		n.WecomWorkbench.DuplicateCheckInterval = 1800
+	}
+	if n.ServerChan.APIBase == "" {
+		n.ServerChan.APIBase = "https://sctapi.ftqq.com"
+	}
+	if n.Bark.DefaultEndpoint == "" {
+		n.Bark.DefaultEndpoint = "https://api.day.app"
+	}
+	if n.Ntfy.DefaultEndpoint == "" {
+		n.Ntfy.DefaultEndpoint = "https://ntfy.sh"
+	}
+	if n.Ntfy.DefaultPriority == "" {
+		n.Ntfy.DefaultPriority = "high"
+	}
+	if n.Ntfy.DefaultTags == "" {
+		n.Ntfy.DefaultTags = "cooking,food"
+	}
+	if n.Worker.PollIntervalSec == 0 {
+		n.Worker.PollIntervalSec = 30
+	}
+	if n.WeChatSubscribe.Page == "" {
+		n.WeChatSubscribe.Page = "pages/order/order"
+	}
 }

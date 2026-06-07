@@ -31,6 +31,7 @@ type User struct {
 	UnionID         string         `gorm:"size:64;column:unionid" json:"unionid"`                     // 微信 UnionID
 	Nickname        string         `gorm:"size:100" json:"nickname"`                                  // 昵称
 	AvatarURL       string         `gorm:"size:500" json:"avatar_url"`                                // 头像 URL
+	WecomUserid     string         `gorm:"size:64;column:wecom_userid" json:"wecom_userid,omitempty"` // 企业微信成员 UserID
 	CurrentFamilyID *uint64        `json:"current_family_id"`                                         // 当前选中家庭（指针允许 NULL）
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`

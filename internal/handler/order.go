@@ -8,7 +8,6 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -30,12 +29,16 @@ func today() string {
 // OrderHandler 每日点菜处理器。
 // 底层调用 OrderService 处理业务逻辑。
 type OrderHandler struct {
-	svc *service.OrderService // 点菜业务服务
+	svc         *service.OrderService
+	notifySvc   *service.NotificationService
 }
 
 // NewOrderHandler 创建点菜处理器。
-func NewOrderHandler(db *gorm.DB) *OrderHandler {
-	return &OrderHandler{svc: service.NewOrderService(db)}
+func NewOrderHandler(db *gorm.DB, hub *service.WebSocketHub) *OrderHandler {
+	return &OrderHandler{
+		svc:       service.NewOrderService(db),
+		notifySvc: service.NewNotificationService(db, hub),
+	}
 }
 
 // addOrderReq 点菜请求体。
@@ -102,65 +105,14 @@ func (h *OrderHandler) Add(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": order})
 
-	// ---- 异步通知家庭厨师 ----
-	// 先捕获所有需要的值，避免 goroutine 中直接使用 gin.Context（context 在请求结束会被回收）
-	userID := middleware.GetUserID(c)
 	familyID := middleware.GetFamilyID(c)
-	recipeID := req.RecipeID
-	mealType := req.MealType
 	orderDate := req.Date
-	db := h.svc.DB() // 获取独立的数据库连接，供 goroutine 使用
-	go func() {
-		// 查询点菜人昵称
-		var adder model.User
-		if err := db.First(&adder, userID).Error; err != nil {
-			log.Printf("[通知] 查询点菜人失败 userID=%d: %v", userID, err)
-			return
-		}
+	orderID := order.ID
+	db := h.svc.DB()
 
-		// 查询菜谱名称
-		var recipe model.Recipe
-		if err := db.First(&recipe, recipeID).Error; err != nil {
-			log.Printf("[通知] 查询菜谱失败 recipeID=%d: %v", recipeID, err)
-			return
-		}
-
-		// 查找家庭中所有厨师（含点菜人自己）
-		var chefs []model.FamilyMember
-		db.Where("family_id = ? AND is_chef = ?",
-			familyID, true).
-			Preload("User").Find(&chefs)
-
-		log.Printf("[通知] 点菜通知：%s 点了 %s，家庭 %d 共 %d 位厨师",
-			adder.Nickname, recipe.Name, familyID, len(chefs))
-
-		// 逐个向厨师推送微信订阅消息
-		for _, chef := range chefs {
-			if chef.User == nil || chef.User.OpenID == "" {
-				log.Printf("[通知] 跳过厨师 userID=%d（无OpenID）", chef.UserID)
-				continue
-			}
-			if err := service.SendOrderNotify(
-				chef.User.OpenID,
-				recipe.Name,
-				adder.Nickname,
-				mealType,
-				orderDate,
-			); err != nil {
-				log.Printf("[通知] 推送失败 → chef=%s(%d) recipe=%s: %v",
-					chef.User.Nickname, chef.UserID, recipe.Name, err)
-			} else {
-				log.Printf("[通知] 推送成功 → chef=%s(%d) recipe=%s",
-					chef.User.Nickname, chef.UserID, recipe.Name)
-			}
-		}
-
-		// 更新所有厨师的服务卡片（聚合展示今日点菜状态）
-		service.UpdateChefServiceCard(db, familyID)
-
-		// 更新动态消息卡片（群聊中已分享的菜单卡片）
-		service.UpdateDynamicMessages(db, familyID, orderDate)
-	}()
+	h.notifySvc.NotifyOrderCreatedAsync(orderID)
+	go service.UpdateChefServiceCard(db, familyID)
+	go service.UpdateDynamicMessages(db, familyID, orderDate)
 }
 
 // List 获取某天某餐次的点菜列表接口。

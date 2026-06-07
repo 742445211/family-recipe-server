@@ -25,10 +25,29 @@ oss:
   region: "cn-hangzhou"
   custom_domain: ""
 
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+
+weather:
+  enabled: true
+  provider: "open_meteo"
+  default_city: "成都"
+  default_lat: 30.5728
+  default_lon: 104.0668
+  cache_ttl_hours: 3
+
 ai:
   api_key: ""
   base_url: "https://api.deepseek.com"
   model: "deepseek-chat"
+  recommend_cache_ttl_hours: 24
+  recommend_count: 5
+  rate_limit:
+    enabled: true
+    max_requests: 3
+    window_hours: 3
 
 notification:
   enabled: true

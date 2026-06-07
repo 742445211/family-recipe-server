@@ -66,9 +66,17 @@ pkg/jwt/                       # JWT 签发与解析
 
 业务错误用 400 + `code` 字段；401 由 `middleware.AuthRequired` 返回。
 
+## AI 推荐（结构化 + Redis）
+
+- `POST /api/ai/recommend` → `{ batch_id, items, rate_limit }`；每人 3h 最多 3 次（429）
+- `GET /api/ai/items/:item_id` — 从 Redis 读草稿
+- `POST /api/ai/items/:item_id/import-recipe` / `add-order` — 从 Redis 入库/点菜
+- `GET /api/weather` — Open-Meteo，默认成都，缓存 3h
+- 配置：`redis`、`weather`、`ai.rate_limit` 见 `config.yaml.example`
+
 ## 测试（TDD）
 
-- 通知相关改动：**先写失败测试，再实现**
+- 通知、AI 相关改动：**先写失败测试，再实现**
 - 单元测试：`internal/service/*_test.go`、`internal/service/notifier/*_test.go`
 - 测试 DB：`setupTestDB()` 使用内存 SQLite（需 CGO）；Windows 无 CGO 时集成测试可能失败，在 Linux 服务器执行 `go test ./...`
 - 纯 notifier 测试不依赖 DB，应始终可通过

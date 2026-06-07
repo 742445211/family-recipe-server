@@ -15,10 +15,12 @@ import (
 type Config struct {
 	Server       ServerConfig       `yaml:"server"`       // 服务器配置
 	MySQL        MySQLConfig        `yaml:"mysql"`        // MySQL 数据库配置
+	Redis        RedisConfig        `yaml:"redis"`        // Redis 缓存配置
 	JWT          JWTConfig          `yaml:"jwt"`          // JWT 认证配置
 	WeChat       WeChatConfig       `yaml:"wechat"`       // 微信小程序配置
 	OSS          OSSConfig          `yaml:"oss"`          // 阿里云 OSS 配置
 	AI           AIConfig           `yaml:"ai"`           // AI 服务配置
+	Weather      WeatherConfig      `yaml:"weather"`      // 天气服务配置
 	Notification NotificationConfig `yaml:"notification"` // 厨师通知配置
 }
 
@@ -67,11 +69,38 @@ type OSSConfig struct {
 	CustomDomain    string `yaml:"custom_domain"`     // 自定义域名（CDN），为空则使用默认 OSS 域名
 }
 
+// RedisConfig Redis 连接配置。
+type RedisConfig struct {
+	Addr     string `yaml:"addr"`
+	Password string `yaml:"password"`
+	DB       int    `yaml:"db"`
+}
+
+// WeatherConfig 天气服务配置（Open-Meteo）。
+type WeatherConfig struct {
+	Enabled       bool    `yaml:"enabled"`
+	Provider      string  `yaml:"provider"`
+	DefaultCity   string  `yaml:"default_city"`
+	DefaultLat    float64 `yaml:"default_lat"`
+	DefaultLon    float64 `yaml:"default_lon"`
+	CacheTTLHours int     `yaml:"cache_ttl_hours"`
+}
+
+// AIRateLimitConfig AI 推荐限流。
+type AIRateLimitConfig struct {
+	Enabled      bool `yaml:"enabled"`
+	MaxRequests  int  `yaml:"max_requests"`
+	WindowHours  int  `yaml:"window_hours"`
+}
+
 // AIConfig AI 大模型服务配置（兼容 OpenAI API 格式）。
 type AIConfig struct {
-	APIKey  string `yaml:"api_key"`  // API 密钥
-	BaseURL string `yaml:"base_url"` // API 基础地址
-	Model   string `yaml:"model"`    // 模型名称
+	APIKey                  string            `yaml:"api_key"`
+	BaseURL                 string            `yaml:"base_url"`
+	Model                   string            `yaml:"model"`
+	RecommendCacheTTLHours  int               `yaml:"recommend_cache_ttl_hours"`
+	RecommendCount          int               `yaml:"recommend_count"`
+	RateLimit               AIRateLimitConfig `yaml:"rate_limit"`
 }
 
 // NotificationConfig 厨师点菜通知总配置。
@@ -213,7 +242,41 @@ func Load(path string) error {
 		AppConfig.Server.Mode = "debug"
 	}
 	applyNotificationDefaults(AppConfig)
+	applyRedisWeatherAIDefaults(AppConfig)
 	return nil
+}
+
+func applyRedisWeatherAIDefaults(c *Config) {
+	if c.Redis.Addr == "" {
+		c.Redis.Addr = "127.0.0.1:6379"
+	}
+	if c.Weather.DefaultCity == "" {
+		c.Weather.DefaultCity = "成都"
+	}
+	if c.Weather.DefaultLat == 0 {
+		c.Weather.DefaultLat = 30.5728
+	}
+	if c.Weather.DefaultLon == 0 {
+		c.Weather.DefaultLon = 104.0668
+	}
+	if c.Weather.CacheTTLHours == 0 {
+		c.Weather.CacheTTLHours = 3
+	}
+	if c.Weather.Provider == "" {
+		c.Weather.Provider = "open_meteo"
+	}
+	if c.AI.RecommendCacheTTLHours == 0 {
+		c.AI.RecommendCacheTTLHours = 24
+	}
+	if c.AI.RecommendCount == 0 {
+		c.AI.RecommendCount = 5
+	}
+	if c.AI.RateLimit.MaxRequests == 0 {
+		c.AI.RateLimit.MaxRequests = 3
+	}
+	if c.AI.RateLimit.WindowHours == 0 {
+		c.AI.RateLimit.WindowHours = 3
+	}
 }
 
 func applyNotificationDefaults(c *Config) {

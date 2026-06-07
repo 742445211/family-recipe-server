@@ -4,10 +4,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
 	"recipe-server/config"
+	"recipe-server/internal/cache"
 	"recipe-server/internal/handler"
 	"recipe-server/internal/middleware"
 	"recipe-server/internal/model"
@@ -53,6 +55,21 @@ func main() {
 		notifySvc.StartRetryWorker()
 	}
 
+	redisCache := cache.NewRedisCache(
+		config.AppConfig.Redis.Addr,
+		config.AppConfig.Redis.Password,
+		config.AppConfig.Redis.DB,
+	)
+	if err := redisCache.Ping(context.Background()); err != nil {
+		log.Printf("警告: Redis 连接失败（AI推荐/天气缓存不可用）: %v", err)
+	}
+	weatherSvc := service.NewWeatherService(redisCache, nil)
+	aiSvc := service.NewAIService()
+	rateLimitSvc := service.NewAIRateLimitService(redisCache)
+	aiCtxSvc := service.NewAIContextService(db, weatherSvc)
+	aiRecommendSvc := service.NewAIRecommendService(db, redisCache, aiSvc, aiCtxSvc, rateLimitSvc)
+	aiH := handler.NewAIHandler(aiRecommendSvc, weatherSvc)
+
 	// 4. 创建 Gin 路由引擎（带默认中间件：Logger + Recovery）
 	r := gin.Default()
 
@@ -70,6 +87,7 @@ func main() {
 		recipeH := handler.NewRecipeHandler(db)
 		api.GET("/recipes", recipeH.List)     // 菜谱列表（支持搜索）
 		api.GET("/recipes/:id", recipeH.Get)  // 菜谱详情
+		api.GET("/weather", aiH.Weather)      // 天气（默认成都）
 
 		// ---------- 需要认证的接口 ----------
 		auth := api.Group("", middleware.AuthRequired())
@@ -120,8 +138,10 @@ func main() {
 			auth.POST("/upload", uploadH.Upload)
 
 			// AI 智能推荐
-			aiH := handler.NewAIHandler(db)
 			auth.POST("/ai/recommend", aiH.Recommend)
+			auth.GET("/ai/items/:item_id", aiH.GetItem)
+			auth.POST("/ai/items/:item_id/import-recipe", aiH.ImportRecipe)
+			auth.POST("/ai/items/:item_id/add-order", aiH.AddOrder)
 		}
 	}
 

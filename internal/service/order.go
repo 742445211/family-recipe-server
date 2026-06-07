@@ -16,6 +16,7 @@ package service
 
 import (
 	"errors"
+	"time"
 
 	"recipe-server/internal/model"
 
@@ -203,6 +204,33 @@ func (s *OrderService) GetByDateAndMeal(familyID uint64, date, mealType string) 
 // 说明:
 //   - Pluck 直接提取 date 列到 []string 切片，不做结构体映射
 //   - 结果按日期降序（最近日期在前），前端可用于构建日期选择器
+// GetRecentOrderNames 近 N 天内最近点菜菜名（最多 maxMeals 条，按日期倒序）。
+func (s *OrderService) GetRecentOrderNames(familyID uint64, days int, maxMeals int) ([]string, error) {
+	if days <= 0 {
+		days = 7
+	}
+	if maxMeals <= 0 {
+		maxMeals = 21
+	}
+	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+	var orders []model.DailyOrder
+	err := s.db.Preload("Recipe").
+		Where("family_id = ? AND date >= ?", familyID, since).
+		Order("date DESC, CASE meal_type WHEN 'dinner' THEN 3 WHEN 'lunch' THEN 2 ELSE 1 END DESC, created_at DESC").
+		Limit(maxMeals).
+		Find(&orders).Error
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(orders))
+	for _, o := range orders {
+		if o.Recipe != nil && o.Recipe.Name != "" {
+			names = append(names, o.Recipe.Name)
+		}
+	}
+	return names, nil
+}
+
 func (s *OrderService) GetRecentDates(familyID uint64, limit int) ([]string, error) {
 	var dates []string
 	err := s.db.Model(&model.DailyOrder{}).

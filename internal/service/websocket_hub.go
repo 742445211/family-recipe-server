@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"recipe-server/pkg/jwt"
 
 	"github.com/gin-gonic/gin"
+	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -108,7 +110,11 @@ func (h *WebSocketHub) HandleWebSocket(c *gin.Context) {
 	}
 	claims, err := jwt.Parse(config.AppConfig.JWT.Secret, token)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "Token无效"})
+		msg := "Token无效"
+		if errors.Is(err, jwtlib.ErrTokenExpired) {
+			msg = "Token已过期，请重新登录"
+		}
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": msg})
 		return
 	}
 

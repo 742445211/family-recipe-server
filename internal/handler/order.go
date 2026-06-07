@@ -15,6 +15,7 @@ import (
 	"recipe-server/internal/middleware"
 	"recipe-server/internal/model"
 	"recipe-server/internal/service"
+	"recipe-server/pkg/dateutil"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -78,6 +79,8 @@ func (h *OrderHandler) Add(c *gin.Context) {
 	// 默认值处理
 	if req.Date == "" {
 		req.Date = today() // 未传日期则默认今天
+	} else {
+		req.Date = dateutil.FormatYMD(req.Date)
 	}
 	if req.MealType == "" {
 		req.MealType = "dinner" // 未传餐次则默认晚餐
@@ -130,7 +133,7 @@ func (h *OrderHandler) Add(c *gin.Context) {
 //   - 成功：{"code":0, "data":[{"id":1,"recipe_id":5,"recipe":{...},"quantity":2,...}]}
 //   - 失败：{"code":500, "msg":"查询失败"}
 func (h *OrderHandler) List(c *gin.Context) {
-	date := c.DefaultQuery("date", today())
+	date := dateutil.FormatYMD(c.DefaultQuery("date", today()))
 	mealType := c.DefaultQuery("meal_type", "")
 
 	// 调用 service 层查询

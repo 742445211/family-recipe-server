@@ -2,6 +2,8 @@ package notifier
 
 import (
 	"context"
+
+	"recipe-server/pkg/dateutil"
 )
 
 // WebSocketNotifier 通过 WebSocket Hub 在线推送。
@@ -44,7 +46,7 @@ func BuildOrderCreatedPayload(msg NotificationMessage) map[string]any {
 		"title":       msg.Title,
 		"content":     msg.Content,
 		"order_id":    msg.OrderID,
-		"date":        msg.Date,
+		"date":        dateutil.FormatYMD(msg.Date),
 		"meal_type":   msg.MealType,
 		"recipe_name": msg.RecipeName,
 		"adder_name":  msg.AdderName,

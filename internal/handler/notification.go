@@ -7,6 +7,7 @@ import (
 	"recipe-server/internal/middleware"
 	"recipe-server/internal/model"
 	"recipe-server/internal/service"
+	"recipe-server/pkg/dateutil"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -42,7 +43,7 @@ func (h *NotificationHandler) ListUnread(c *gin.Context) {
 		it := item{Notification: n}
 		var order model.DailyOrder
 		if h.svc.DB().Select("date", "meal_type").First(&order, n.OrderID).Error == nil {
-			it.OrderDate = order.Date
+			it.OrderDate = dateutil.FormatYMD(order.Date)
 			it.MealType = order.MealType
 		}
 		out = append(out, it)

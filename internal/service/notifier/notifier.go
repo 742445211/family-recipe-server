@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+
+	"recipe-server/pkg/dateutil"
 )
 
 // NotificationMessage 通知消息体。
@@ -63,7 +65,7 @@ func BuildOrderContent(msg NotificationMessage) string {
 	meal := MealName(msg.MealType)
 	var b strings.Builder
 	b.WriteString("日期：")
-	b.WriteString(msg.Date)
+	b.WriteString(dateutil.FormatYMD(msg.Date))
 	b.WriteString(" ")
 	b.WriteString(meal)
 	b.WriteString("\n")

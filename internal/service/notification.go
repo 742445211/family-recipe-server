@@ -10,6 +10,7 @@ import (
 	"recipe-server/internal/model"
 	"recipe-server/internal/service/notifier"
 	"recipe-server/internal/service/wechattoken"
+	"recipe-server/pkg/dateutil"
 
 	"gorm.io/gorm"
 )
@@ -82,11 +83,12 @@ func (s *NotificationService) NotifyOrderCreated(orderID uint64) error {
 	}
 
 	title := "有新的点菜"
+	orderDate := dateutil.FormatYMD(order.Date)
 	msgBase := notifier.NotificationMessage{
 		RecipeName:  recipeName,
 		AdderName:   adderName,
 		MealType:    order.MealType,
-		Date:        order.Date,
+		Date:        orderDate,
 		Note:        order.Note,
 		Ingredients: ingredients,
 	}

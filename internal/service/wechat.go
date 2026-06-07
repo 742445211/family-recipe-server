@@ -30,6 +30,7 @@ import (
 	"recipe-server/config"
 	"recipe-server/internal/model"
 	"recipe-server/internal/service/wechattoken"
+	"recipe-server/pkg/dateutil"
 
 	"gorm.io/gorm"
 )
@@ -125,7 +126,7 @@ func SendOrderNotify(openid, recipeName, adderName, mealType, date string) error
 
 	// 构造订阅消息字段（thing 类型字段最多 20 字符，超出自动截断）
 	data := templateData{
-		"time7":   {Value: date + " " + mealName},          // 订单时间 = 日期 + 餐次
+		"time7":   {Value: dateutil.FormatYMD(date) + " " + mealName}, // 日期 YYYY-MM-DD + 餐次
 		"thing14": {Value: truncate(adderName, 20)},         // 下单人昵称
 		"thing13": {Value: truncate(recipeName, 20)},        // 被点的菜名
 	}

@@ -9,6 +9,7 @@ import (
 
 	"recipe-server/config"
 	"recipe-server/internal/service/wechattoken"
+	"recipe-server/pkg/dateutil"
 )
 
 // WeChatSubscribeNotifier 微信一次性订阅消息。
@@ -54,7 +55,7 @@ func (n *WeChatSubscribeNotifier) Send(ctx context.Context, msg NotificationMess
 		page = "pages/order/order"
 	}
 	data := map[string]any{
-		"time7":   map[string]string{"value": msg.Date + " " + meal},
+		"time7":   map[string]string{"value": dateutil.FormatYMD(msg.Date) + " " + meal},
 		"thing14": map[string]string{"value": truncateRunes(msg.AdderName, 20)},
 		"thing13": map[string]string{"value": truncateRunes(msg.RecipeName, 20)},
 	}

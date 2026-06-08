@@ -41,7 +41,69 @@ func TestBuildOrderCardDescription(t *testing.T) {
 	}
 }
 
-func TestWecomWorkbenchSendsTextCard(t *testing.T) {
+func TestWecomWorkbenchSendsNewsWithRecipeCover(t *testing.T) {
+	var payload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &payload)
+		_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	oldCfg := config.AppConfig
+	config.AppConfig = &config.Config{
+		Notification: config.NotificationConfig{
+			WecomWorkbench: config.NotificationWecom{
+				Enabled: true, CorpID: "c", AgentID: 7, Secret: "s",
+				APIBase: srv.URL, MsgType: "news", CardURL: "https://example.com/order",
+				DuplicateCheckInterval: 1800,
+			},
+		},
+	}
+	t.Cleanup(func() { config.AppConfig = oldCfg })
+
+	n := NewWecomWorkbenchNotifier(true, fakeTokenProvider{tok: "tok"})
+	res, err := n.Send(context.Background(),
+		NotificationMessage{
+			Title: "有新的点菜", RecipeName: "红烧肉", AdderName: "张三",
+			MealType: "dinner", Date: "2026-06-05",
+			RecipeCoverURL: "https://cdn.example.com/hongshaorou.jpg",
+		},
+		NotificationTarget{Secret: "useridA"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if res.Status != "sent" {
+		t.Fatalf("status: %+v", res)
+	}
+	if payload["msgtype"] != "news" {
+		t.Fatalf("有封面图时应发送 news 图文卡片, got %v", payload["msgtype"])
+	}
+	news, ok := payload["news"].(map[string]any)
+	if !ok {
+		t.Fatalf("缺少 news 字段: %v", payload)
+	}
+	articles, ok := news["articles"].([]any)
+	if !ok || len(articles) == 0 {
+		t.Fatalf("news.articles 应非空: %v", news)
+	}
+	article, ok := articles[0].(map[string]any)
+	if !ok {
+		t.Fatalf("article 格式错误: %v", articles[0])
+	}
+	if article["picurl"] != "https://cdn.example.com/hongshaorou.jpg" {
+		t.Fatalf("顶部图片应使用菜品封面 picurl=%v", article["picurl"])
+	}
+	if article["url"] != "https://example.com/order" {
+		t.Fatalf("news.url 应取配置 card_url: %v", article["url"])
+	}
+	desc, _ := article["description"].(string)
+	if !strings.Contains(desc, "红烧肉") || !strings.Contains(desc, "张三") {
+		t.Fatalf("news.description 应包含菜名与点菜人: %v", desc)
+	}
+}
+
+func TestWecomWorkbenchSendsTextCardWithoutCover(t *testing.T) {
 	var payload map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -63,28 +125,34 @@ func TestWecomWorkbenchSendsTextCard(t *testing.T) {
 	t.Cleanup(func() { config.AppConfig = oldCfg })
 
 	n := NewWecomWorkbenchNotifier(true, fakeTokenProvider{tok: "tok"})
-	res, err := n.Send(context.Background(),
+	_, err := n.Send(context.Background(),
 		NotificationMessage{RecipeName: "红烧肉", AdderName: "张三", MealType: "dinner", Date: "2026-06-05"},
 		NotificationTarget{Secret: "useridA"})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
-	if res.Status != "sent" {
-		t.Fatalf("status: %+v", res)
-	}
 	if payload["msgtype"] != "textcard" {
-		t.Fatalf("应发送 textcard, got %v", payload["msgtype"])
+		t.Fatalf("无封面图时应发送 textcard, got %v", payload["msgtype"])
 	}
 	card, ok := payload["textcard"].(map[string]any)
 	if !ok {
 		t.Fatalf("缺少 textcard 字段: %v", payload)
 	}
-	if card["url"] != "https://example.com" {
-		t.Fatalf("textcard.url 应取配置值: %v", card["url"])
-	}
 	desc, _ := card["description"].(string)
 	if !strings.Contains(desc, "红烧肉") || !strings.Contains(desc, "张三") {
 		t.Fatalf("textcard.description 应包含菜名与点菜人: %v", desc)
+	}
+}
+
+func TestRecipeCoverURL(t *testing.T) {
+	msg := NotificationMessage{RecipeCoverURL: "https://a.com/1.jpg"}
+	cfg := config.NotificationWecom{DefaultCoverURL: "https://default.jpg"}
+	if got := recipeCoverURL(msg, cfg); got != "https://a.com/1.jpg" {
+		t.Fatalf("应优先使用菜品封面: %q", got)
+	}
+	msg.RecipeCoverURL = ""
+	if got := recipeCoverURL(msg, cfg); got != "https://default.jpg" {
+		t.Fatalf("无菜品封面时应回落默认图: %q", got)
 	}
 }
 

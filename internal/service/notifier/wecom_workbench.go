@@ -28,6 +28,7 @@ func NewWecomWorkbenchNotifier(enabled bool, token wechattoken.Provider) *WecomW
 	}
 }
 
+// cardTitle 卡片标题，优先使用消息标题。
 func cardTitle(msg NotificationMessage) string {
 	if strings.TrimSpace(msg.Title) != "" {
 		return msg.Title
@@ -35,6 +36,7 @@ func cardTitle(msg NotificationMessage) string {
 	return "有新的点菜"
 }
 
+// wecomCardURL 卡片点击跳转地址。
 func wecomCardURL(cfg config.NotificationWecom) string {
 	if strings.TrimSpace(cfg.CardURL) != "" {
 		return cfg.CardURL
@@ -42,7 +44,42 @@ func wecomCardURL(cfg config.NotificationWecom) string {
 	return "https://www.zzzjc.xin"
 }
 
+// recipeCoverURL 解析图文卡片顶部图片：优先菜品封面，其次平台默认封面。
+func recipeCoverURL(msg NotificationMessage, cfg config.NotificationWecom) string {
+	if u := strings.TrimSpace(msg.RecipeCoverURL); u != "" {
+		return u
+	}
+	return strings.TrimSpace(cfg.DefaultCoverURL)
+}
+
+// isWecomCardMode 是否为卡片类消息（news 图文 / textcard 文本卡片）。
+func isWecomCardMode(msgType string) bool {
+	switch strings.ToLower(strings.TrimSpace(msgType)) {
+	case "news", "textcard":
+		return true
+	default:
+		return false
+	}
+}
+
+// useNewsWithCover 是否使用 news 图文（顶部可展示 picurl 封面图）。
+func useNewsWithCover(msgType string, coverURL string) bool {
+	if coverURL == "" {
+		return false
+	}
+	// news 模式始终带图；textcard 在有封面时升级为 news 以展示顶部图片。
+	switch strings.ToLower(strings.TrimSpace(msgType)) {
+	case "news":
+		return true
+	case "textcard":
+		return true
+	default:
+		return false
+	}
+}
+
 func (n *WecomWorkbenchNotifier) Channel() string { return "wecom_workbench" }
+
 func (n *WecomWorkbenchNotifier) Enabled() bool {
 	cfg := config.AppConfig.Notification.WecomWorkbench
 	return n.enabled && cfg.CorpID != "" && cfg.AgentID > 0 && cfg.Secret != ""
@@ -67,29 +104,14 @@ func (n *WecomWorkbenchNotifier) Send(ctx context.Context, msg NotificationMessa
 	}
 
 	cfg := config.AppConfig.Notification.WecomWorkbench
-
 	payload := map[string]any{
 		"touser":                   userid,
 		"agentid":                  cfg.AgentID,
 		"enable_duplicate_check":   1,
 		"duplicate_check_interval": cfg.DuplicateCheckInterval,
 	}
-	if strings.EqualFold(cfg.MsgType, "textcard") {
-		payload["msgtype"] = "textcard"
-		payload["textcard"] = map[string]string{
-			"title":       cardTitle(msg),
-			"description": BuildOrderCardDescription(msg),
-			"url":         wecomCardURL(cfg),
-			"btntxt":      "查看详情",
-		}
-	} else {
-		content := BuildOrderContent(msg)
-		if msg.Content != "" {
-			content = msg.Content
-		}
-		payload["msgtype"] = "text"
-		payload["text"] = map[string]string{"content": content}
-	}
+	n.applyWecomPayload(payload, cfg, msg)
+
 	body, _ := json.Marshal(payload)
 	base := trimSlash(cfg.APIBase)
 	url := fmt.Sprintf("%s/cgi-bin/message/send?access_token=%s", base, token)
@@ -100,9 +122,9 @@ func (n *WecomWorkbenchNotifier) Send(ctx context.Context, msg NotificationMessa
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
 	var result struct {
-		ErrCode      int    `json:"errcode"`
-		ErrMsg       string `json:"errmsg"`
-		InvalidUser  string `json:"invaliduser"`
+		ErrCode     int    `json:"errcode"`
+		ErrMsg      string `json:"errmsg"`
+		InvalidUser string `json:"invaliduser"`
 	}
 	_ = json.Unmarshal(respBody, &result)
 	if result.ErrCode != 0 {
@@ -116,4 +138,40 @@ func (n *WecomWorkbenchNotifier) Send(ctx context.Context, msg NotificationMessa
 		}, fmt.Errorf("wecom send error: %s", result.ErrMsg)
 	}
 	return &SendResult{Status: "sent", MaskedTarget: mask(userid)}, nil
+}
+
+// applyWecomPayload 按配置与消息内容填充企微消息体。
+func (n *WecomWorkbenchNotifier) applyWecomPayload(payload map[string]any, cfg config.NotificationWecom, msg NotificationMessage) {
+	cover := recipeCoverURL(msg, cfg)
+	switch {
+	case useNewsWithCover(cfg.MsgType, cover):
+		// news 图文：顶部 picurl 展示菜品封面（企微 textcard 不支持配图）。
+		payload["msgtype"] = "news"
+		payload["news"] = map[string]any{
+			"articles": []map[string]string{{
+				"title":       cardTitle(msg),
+				"description": BuildOrderNewsDescription(msg),
+				"url":         wecomCardURL(cfg),
+				"picurl":      cover,
+				"btntxt":      "查看详情",
+			}},
+		}
+	case isWecomCardMode(cfg.MsgType):
+		// textcard 文本卡片：无封面时的兜底样式。
+		payload["msgtype"] = "textcard"
+		payload["textcard"] = map[string]string{
+			"title":       cardTitle(msg),
+			"description": BuildOrderCardDescription(msg),
+			"url":         wecomCardURL(cfg),
+			"btntxt":      "查看详情",
+		}
+	default:
+		// 纯文本。
+		content := BuildOrderContent(msg)
+		if msg.Content != "" {
+			content = msg.Content
+		}
+		payload["msgtype"] = "text"
+		payload["text"] = map[string]string{"content": content}
+	}
 }

@@ -73,8 +73,9 @@ notification:
     agent_id: 1000002
     secret: "YOUR_AGENT_SECRET"
     api_base: "https://qyapi.weixin.qq.com"
-    msg_type: "textcard"
+    msg_type: "news"
     card_url: "https://www.zzzjc.xin"
+    default_cover_url: ""
     duplicate_check_interval: 1800
 
   server_chan:

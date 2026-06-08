@@ -73,9 +73,11 @@ func (s *NotificationService) NotifyOrderCreated(orderID uint64) error {
 
 	recipeName := ""
 	ingredients := ""
+	recipeCoverURL := ""
 	if order.Recipe != nil {
 		recipeName = order.Recipe.Name
 		ingredients = order.Recipe.Ingredients
+		recipeCoverURL = order.Recipe.CoverURL
 	}
 	adderName := ""
 	if order.Adder != nil {
@@ -85,12 +87,13 @@ func (s *NotificationService) NotifyOrderCreated(orderID uint64) error {
 	title := "有新的点菜"
 	orderDate := dateutil.FormatYMD(order.Date)
 	msgBase := notifier.NotificationMessage{
-		RecipeName:  recipeName,
-		AdderName:   adderName,
-		MealType:    order.MealType,
-		Date:        orderDate,
-		Note:        order.Note,
-		Ingredients: ingredients,
+		RecipeName:     recipeName,
+		AdderName:      adderName,
+		MealType:       order.MealType,
+		Date:           orderDate,
+		Note:           order.Note,
+		Ingredients:    ingredients,
+		RecipeCoverURL: recipeCoverURL,
 	}
 	content := notifier.BuildOrderContent(msgBase)
 
@@ -119,6 +122,7 @@ func (s *NotificationService) NotifyOrderCreated(orderID uint64) error {
 			OpenID:         chef.User.OpenID,
 			Note:           order.Note,
 			Ingredients:    ingredients,
+			RecipeCoverURL: recipeCoverURL,
 		}
 
 		targets := chSvc.GetEnabledTargets(chef.UserID, chef.User)
@@ -425,12 +429,15 @@ func (s *NotificationService) RetryPendingDeliveries() error {
 			}
 			if order.Recipe != nil {
 				msg.RecipeName = order.Recipe.Name
+				msg.Ingredients = order.Recipe.Ingredients
+				msg.RecipeCoverURL = order.Recipe.CoverURL
 			}
 			if order.Adder != nil {
 				msg.AdderName = order.Adder.Nickname
 			}
 			msg.MealType = order.MealType
 			msg.Date = order.Date
+			msg.Note = order.Note
 
 			targets := NewNotificationChannelService(s.db).GetEnabledTargets(n.ReceiverUserID, &user)
 

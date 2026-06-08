@@ -21,8 +21,9 @@ type NotificationMessage struct {
 	Date           string
 	Page           string
 	OpenID         string
-	Note           string
-	Ingredients    string // 菜谱食材 JSON（[{"name":"","amount":""}]）
+	Note            string
+	Ingredients     string // 菜谱食材 JSON（[{"name":"","amount":""}]）
+	RecipeCoverURL  string // 菜谱封面图 URL，用于企微图文卡片顶部 picurl
 }
 
 // NotificationTarget 用户级通道目标。
@@ -75,6 +76,33 @@ func BuildOrderContent(msg NotificationMessage) string {
 	if ing := FormatIngredients(msg.Ingredients); ing != "" {
 		b.WriteString("\n食材：")
 		b.WriteString(ing)
+	}
+	if strings.TrimSpace(msg.Note) != "" {
+		b.WriteString("\n备注：")
+		b.WriteString(msg.Note)
+	}
+	return b.String()
+}
+
+// BuildOrderNewsDescription 构建企业微信 news 图文卡片的纯文本描述（news 不支持 HTML）。
+func BuildOrderNewsDescription(msg NotificationMessage) string {
+	meal := MealName(msg.MealType)
+	var b strings.Builder
+	b.WriteString(dateutil.FormatYMD(msg.Date))
+	if meal != "" {
+		b.WriteString(" ")
+		b.WriteString(meal)
+	}
+	b.WriteString("\n")
+	b.WriteString(msg.RecipeName)
+	b.WriteString(" 1份")
+	if strings.TrimSpace(msg.AdderName) != "" {
+		b.WriteString("\n点菜人：")
+		b.WriteString(msg.AdderName)
+	}
+	if ing := FormatIngredients(msg.Ingredients); ing != "" {
+		b.WriteString("\n食材：")
+		b.WriteString(truncateRunes(ing, 80))
 	}
 	if strings.TrimSpace(msg.Note) != "" {
 		b.WriteString("\n备注：")

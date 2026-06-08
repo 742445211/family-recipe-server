@@ -1,0 +1,53 @@
+internal/service/ai.go
+  s_a81105b91fb95e::t_30d6f3b9c75b97 100
+internal/service/category_test.go
+  s_a81105b91fb95e::t_85f00d51a0ed92 1-63
+internal/service/ai_recommend.go
+  s_a81105b91fb95e::t_d99648829d81ff 93-95,100-107
+  s_a81105b91fb95e::t_e2b9377d45ad26 182-185,191
+  s_a81105b91fb95e::t_ab5e5e913192ba 262-265,268
+internal/service/ai_context.go
+  s_a81105b91fb95e::t_6fbc9a9d8cdea2 61-64
+  s_a81105b91fb95e::t_f578a41ba1d3b4 102-107,109-113
+  s_a81105b91fb95e::t_09491c07afbaf2 53
+  s_a81105b91fb95e::t_49cb1c4950b19a 69-72
+  s_a81105b91fb95e::t_2208cbd3ae86ff 139-142,144-145
+internal/testutil/db.go
+  s_a81105b91fb95e::t_1e9b7f1e8777e3 31
+internal/service/ai_recommend_test.go
+  s_a81105b91fb95e::t_2ec57995969e84 222-258
+internal/handler/category.go
+  s_a81105b91fb95e::t_c95517d2c4e1e7 1-39
+internal/model/models.go
+  s_a81105b91fb95e::t_db1d5cf3de4ef9 63-66,68-74
+  s_a81105b91fb95e::t_3131514761106b 67
+internal/handler/recipe.go
+  s_a81105b91fb95e::t_32ce23475dc794 81-88
+  s_a81105b91fb95e::t_2c0bb7ea07c876 132-140
+  s_a81105b91fb95e::t_07baabfe19e686 17
+migrations/003_recipe_categories.sql
+  s_a81105b91fb95e::t_9ce93099908ea4 1-12
+main.go
+  s_a81105b91fb95e::t_c2daa2238cb013 41
+  s_a81105b91fb95e::t_6697173b811b68 48-53
+  s_a81105b91fb95e::t_1e05a64776cc34 37
+  s_a81105b91fb95e::t_2e03853bae943c 114-116
+internal/service/category.go
+  s_a81105b91fb95e::t_d989e071f7e547 1-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "2c30ff15a3369a2b4bea5ddbdc442d306f761411",
+  "prompts": {},
+  "sessions": {
+    "s_a81105b91fb95e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "516cca10-8d3e-4e52-a07f-2845ebcb5590",
+        "model": "default"
+      },
+      "human_author": "张津川 <jinchuan@uxin.com>"
+    }
+  }
+}

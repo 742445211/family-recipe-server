@@ -1,0 +1,29 @@
+internal/service/notifier/wecom_workbench.go
+  s_a81105b91fb95e::t_e70975e7faa648 191-192,195
+  s_a81105b91fb95e::t_5b3fa619bfe392 81-124
+config/config_test.go
+  s_a81105b91fb95e::t_c10c32af6a8548 69-105
+internal/service/notifier/wecom_workbench_test.go
+  s_a81105b91fb95e::t_3e12bb24d0c0a6 106-287
+config/config.go
+  s_a81105b91fb95e::t_bba01c3f36c1b7 150-152
+  s_a81105b91fb95e::t_02899ade99b01a 215-233
+config.yaml.example
+  s_a81105b91fb95e::t_a250dcc1a9ed33 79-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c05e0ae1f969f7b81c40dd2c47802d1959554988",
+  "prompts": {},
+  "sessions": {
+    "s_a81105b91fb95e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "516cca10-8d3e-4e52-a07f-2845ebcb5590",
+        "model": "default"
+      },
+      "human_author": "张津川 <jinchuan@uxin.com>"
+    }
+  }
+}

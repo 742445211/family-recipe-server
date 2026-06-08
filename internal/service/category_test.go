@@ -61,3 +61,36 @@ func TestCategorySyncFromRecipes(t *testing.T) {
 		}
 	}
 }
+
+func TestCategoryListPublicNames(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
+	other := model.Family{Name: "其他家", InviteCode: "PUB001"}
+	db.Create(&other)
+
+	recipeSvc := NewRecipeService(db)
+	create := func(name, cat string, fid uint64, pub bool) {
+		r := &model.Recipe{Name: name, Category: cat, CreatorID: uid, FamilyID: fid, IsPublic: pub}
+		if err := recipeSvc.Create(r); err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+	create("公开荤菜", "荤菜", fid, true)
+	create("公开汤", "汤", other.ID, true)
+	create("私有素菜", "素菜", fid, false)
+	create("空分类公开", "", fid, true)
+
+	names, err := NewCategoryService(db).ListPublicNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"其他", "汤", "荤菜"}
+	if len(names) != len(want) {
+		t.Fatalf("公开分类: got %v want %v", names, want)
+	}
+	for i, n := range want {
+		if names[i] != n {
+			t.Fatalf("公开分类顺序/内容: got %v want %v", names, want)
+		}
+	}
+}

@@ -96,6 +96,9 @@ func main() {
 		api.GET("/weather", aiH.Weather)      // 天气（默认成都）
 		api.GET("/app/features", handler.NewAppHandler().Features) // 功能开关（公开）
 
+		categoryH := handler.NewCategoryHandler(db)
+		api.GET("/categories/public", categoryH.ListPublic) // 公开菜谱分类（无需登录）
+
 		// ---------- 需要认证的接口 ----------
 		auth := api.Group("", middleware.AuthRequired())
 		{
@@ -111,7 +114,6 @@ func main() {
 			auth.GET("/families/:id/members", familyH.Members)  // 家庭成员列表
 			auth.POST("/families/chef", familyH.ToggleChef)     // 切换厨师身份
 
-			categoryH := handler.NewCategoryHandler(db)
 			auth.GET("/categories", categoryH.List)          // 菜谱分类列表
 
 			// 菜谱写操作（需登录）

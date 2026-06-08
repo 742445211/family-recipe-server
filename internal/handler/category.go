@@ -37,3 +37,13 @@ func (h *CategoryHandler) List(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "data": cats})
 }
+
+// ListPublic GET /api/categories/public — 公开菜谱中出现过的分类（无需登录）。
+func (h *CategoryHandler) ListPublic(c *gin.Context) {
+	names, err := h.svc.ListPublicNames()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "data": names})
+}

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -82,6 +83,29 @@ func (s *CategoryService) SyncFromRecipes(familyID uint64) error {
 		}
 	}
 	return nil
+}
+
+// ListPublicNames 返回所有公开菜谱中出现过的分类名（去重、归一化、按名称排序）。
+func (s *CategoryService) ListPublicNames() ([]string, error) {
+	var raw []string
+	if err := s.db.Model(&model.Recipe{}).
+		Where("is_public = ?", true).
+		Distinct("category").
+		Pluck("category", &raw).Error; err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]string, 0, len(raw))
+	for _, n := range raw {
+		n = NormalizeCategoryName(n)
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // SyncAllFamilies 从全库菜谱同步分类（启动时补齐历史数据）。

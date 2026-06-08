@@ -82,6 +82,23 @@ func TestWeChatSubscribeConfigured(t *testing.T) {
 	}
 }
 
+func TestAIRecommendEnabled(t *testing.T) {
+	if (&Config{}).AIRecommendEnabled() {
+		t.Fatal("缺省 recommend_enabled 应为 false")
+	}
+	cfg := &Config{AI: AIConfig{RecommendEnabled: true}}
+	if !cfg.AIRecommendEnabled() {
+		t.Fatal("recommend_enabled=true 时应返回 true")
+	}
+	cfg.AI.RecommendEnabled = false
+	if cfg.AIRecommendEnabled() {
+		t.Fatal("recommend_enabled=false 时应返回 false")
+	}
+	if (*Config)(nil).AIRecommendEnabled() {
+		t.Fatal("nil Config 应返回 false")
+	}
+}
+
 func TestLoadAppliesDefaults(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

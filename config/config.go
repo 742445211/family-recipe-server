@@ -95,12 +95,13 @@ type AIRateLimitConfig struct {
 
 // AIConfig AI 大模型服务配置（兼容 OpenAI API 格式）。
 type AIConfig struct {
-	APIKey                  string            `yaml:"api_key"`
-	BaseURL                 string            `yaml:"base_url"`
-	Model                   string            `yaml:"model"`
-	RecommendCacheTTLHours  int               `yaml:"recommend_cache_ttl_hours"`
-	RecommendCount          int               `yaml:"recommend_count"`
-	RateLimit               AIRateLimitConfig `yaml:"rate_limit"`
+	APIKey                 string            `yaml:"api_key"`
+	BaseURL                string            `yaml:"base_url"`
+	Model                  string            `yaml:"model"`
+	RecommendEnabled       bool              `yaml:"recommend_enabled"` // 是否开放 AI 推荐（前端入口 + API）
+	RecommendCacheTTLHours int               `yaml:"recommend_cache_ttl_hours"`
+	RecommendCount         int               `yaml:"recommend_count"`
+	RateLimit              AIRateLimitConfig `yaml:"rate_limit"`
 }
 
 // NotificationConfig 厨师点菜通知总配置。
@@ -175,6 +176,14 @@ type NotificationNtfy struct {
 type NotificationWorker struct {
 	Enabled         bool `yaml:"enabled"`
 	PollIntervalSec int  `yaml:"poll_interval_sec"`
+}
+
+// AIRecommendEnabled 是否开放 AI 推荐功能（前端入口与 /api/ai/* 接口）。
+func (c *Config) AIRecommendEnabled() bool {
+	if c == nil {
+		return false
+	}
+	return c.AI.RecommendEnabled
 }
 
 // WeChatConfigured 小程序 AppID / Secret 是否已配置。

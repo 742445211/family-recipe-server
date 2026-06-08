@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"recipe-server/config"
 	"recipe-server/internal/middleware"
 	"recipe-server/internal/service"
 
@@ -22,8 +23,20 @@ func NewAIHandler(recommend *service.AIRecommendService, weather *service.Weathe
 	return &AIHandler{recommend: recommend, weather: weather}
 }
 
+// aiRecommendDisabled 当 AI 推荐未开启时写 403 并返回 true。
+func aiRecommendDisabled(c *gin.Context) bool {
+	if config.AppConfig == nil || !config.AppConfig.AIRecommendEnabled() {
+		c.JSON(http.StatusForbidden, gin.H{"code": 403, "msg": "AI推荐功能未开启"})
+		return true
+	}
+	return false
+}
+
 // Recommend POST /api/ai/recommend
 func (h *AIHandler) Recommend(c *gin.Context) {
+	if aiRecommendDisabled(c) {
+		return
+	}
 	familyID := middleware.GetFamilyID(c)
 	userID := middleware.GetUserID(c)
 	mealType := c.Query("meal_type")
@@ -46,6 +59,9 @@ func (h *AIHandler) Recommend(c *gin.Context) {
 
 // GetItem GET /api/ai/items/:item_id
 func (h *AIHandler) GetItem(c *gin.Context) {
+	if aiRecommendDisabled(c) {
+		return
+	}
 	itemID := c.Param("item_id")
 	familyID := middleware.GetFamilyID(c)
 	draft, err := h.recommend.GetItem(c.Request.Context(), itemID, familyID)
@@ -68,6 +84,9 @@ type importRecipeReq struct{}
 
 // ImportRecipe POST /api/ai/items/:item_id/import-recipe
 func (h *AIHandler) ImportRecipe(c *gin.Context) {
+	if aiRecommendDisabled(c) {
+		return
+	}
 	itemID := c.Param("item_id")
 	familyID := middleware.GetFamilyID(c)
 	userID := middleware.GetUserID(c)
@@ -93,6 +112,9 @@ func (h *AIHandler) ImportRecipe(c *gin.Context) {
 
 // AddOrder POST /api/ai/items/:item_id/add-order
 func (h *AIHandler) AddOrder(c *gin.Context) {
+	if aiRecommendDisabled(c) {
+		return
+	}
 	itemID := c.Param("item_id")
 	familyID := middleware.GetFamilyID(c)
 	userID := middleware.GetUserID(c)

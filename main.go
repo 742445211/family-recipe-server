@@ -88,6 +88,7 @@ func main() {
 		api.GET("/recipes", recipeH.List)     // 菜谱列表（支持搜索）
 		api.GET("/recipes/:id", recipeH.Get)  // 菜谱详情
 		api.GET("/weather", aiH.Weather)      // 天气（默认成都）
+		api.GET("/app/features", handler.NewAppHandler().Features) // 功能开关（公开）
 
 		// ---------- 需要认证的接口 ----------
 		auth := api.Group("", middleware.AuthRequired())

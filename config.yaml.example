@@ -39,6 +39,7 @@ weather:
   cache_ttl_hours: 3
 
 ai:
+  recommend_enabled: true   # false 时前端隐藏 AI 推荐，/api/ai/* 返回 403
   api_key: ""
   base_url: "https://api.deepseek.com"
   model: "deepseek-chat"

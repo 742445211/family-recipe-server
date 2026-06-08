@@ -68,11 +68,13 @@ pkg/jwt/                       # JWT 签发与解析
 
 ## AI 推荐（结构化 + Redis）
 
+- **功能开关**：`ai.recommend_enabled`（`config.yaml`）；`false` 时 `/api/ai/*` 返回 403，前端隐藏入口
+- **前端读取**：`GET /api/app/features` → `{ "ai_recommend": true/false }`（公开，无需登录）
 - `POST /api/ai/recommend` → `{ batch_id, items, rate_limit }`；每人 3h 最多 3 次（429）
 - `GET /api/ai/items/:item_id` — 从 Redis 读草稿
 - `POST /api/ai/items/:item_id/import-recipe` / `add-order` — 从 Redis 入库/点菜
-- `GET /api/weather` — Open-Meteo，默认成都，缓存 3h
-- 配置：`redis`、`weather`、`ai.rate_limit` 见 `config.yaml.example`
+- `GET /api/weather` — Open-Meteo，默认成都，缓存 3h（不受 AI 开关影响）
+- 配置：`redis`、`weather`、`ai.rate_limit`、`ai.recommend_enabled` 见 `config.yaml.example`
 
 ## 测试（严格 TDD，强制）
 

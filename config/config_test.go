@@ -66,6 +66,43 @@ func TestEffectiveMiniprogramState(t *testing.T) {
 	}
 }
 
+func TestEffectiveWecomMiniAppID(t *testing.T) {
+	cfg := &Config{
+		WeChat: WeChatConfig{AppID: "wx-fallback"},
+		Notification: NotificationConfig{
+			WecomWorkbench: NotificationWecom{MiniAppID: "wx-explicit"},
+		},
+	}
+	if got := cfg.EffectiveWecomMiniAppID(); got != "wx-explicit" {
+		t.Fatalf("wecom_workbench.mini_appid 优先: got %q", got)
+	}
+	cfg.Notification.WecomWorkbench.MiniAppID = ""
+	if got := cfg.EffectiveWecomMiniAppID(); got != "wx-fallback" {
+		t.Fatalf("应回退 wechat.appid: got %q", got)
+	}
+}
+
+func TestWecomMiniProgramJumpConfigured(t *testing.T) {
+	cfg := &Config{
+		WeChat: WeChatConfig{AppID: "wx123"},
+		Notification: NotificationConfig{
+			WecomWorkbench: NotificationWecom{MiniPagepath: "pages/order/order"},
+		},
+	}
+	if !cfg.WecomMiniProgramJumpConfigured() {
+		t.Fatal("appid 与 pagepath 齐全时应返回 true")
+	}
+	cfg.Notification.WecomWorkbench.MiniPagepath = ""
+	if cfg.WecomMiniProgramJumpConfigured() {
+		t.Fatal("缺少 pagepath 时应返回 false")
+	}
+	cfg.Notification.WecomWorkbench.MiniPagepath = "pages/order/order"
+	cfg.WeChat.AppID = ""
+	if cfg.WecomMiniProgramJumpConfigured() {
+		t.Fatal("缺少 appid 时应返回 false")
+	}
+}
+
 func TestWeChatSubscribeConfigured(t *testing.T) {
 	cfg := &Config{
 		WeChat: WeChatConfig{AppID: "wx", Secret: "sec", TemplateID: "tmpl"},

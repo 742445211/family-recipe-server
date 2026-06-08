@@ -103,6 +103,188 @@ func TestWecomWorkbenchSendsNewsWithRecipeCover(t *testing.T) {
 	}
 }
 
+func TestWecomWorkbenchSendsNewsWithMiniProgramJump(t *testing.T) {
+	var payload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &payload)
+		_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	oldCfg := config.AppConfig
+	config.AppConfig = &config.Config{
+		Notification: config.NotificationConfig{
+			WecomWorkbench: config.NotificationWecom{
+				Enabled: true, CorpID: "c", AgentID: 7, Secret: "s",
+				APIBase: srv.URL, MsgType: "news", CardURL: "https://example.com/order",
+				MiniAppID: "wx-mini", MiniPagepath: "pages/order/order",
+				DuplicateCheckInterval: 1800,
+			},
+		},
+	}
+	t.Cleanup(func() { config.AppConfig = oldCfg })
+
+	n := NewWecomWorkbenchNotifier(true, fakeTokenProvider{tok: "tok"})
+	_, err := n.Send(context.Background(),
+		NotificationMessage{
+			Title: "有新的点菜", RecipeName: "红烧肉", AdderName: "张三",
+			MealType: "dinner", Date: "2026-06-05",
+			RecipeCoverURL: "https://cdn.example.com/hongshaorou.jpg",
+		},
+		NotificationTarget{Secret: "useridA"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	article := firstNewsArticle(t, payload)
+	if article["appid"] != "wx-mini" {
+		t.Fatalf("应发送 appid: %v", article["appid"])
+	}
+	if article["pagepath"] != "pages/order/order" {
+		t.Fatalf("应发送 pagepath: %v", article["pagepath"])
+	}
+	if _, hasURL := article["url"]; hasURL {
+		t.Fatalf("配置小程序跳转时不应发送 url: %v", article["url"])
+	}
+}
+
+func TestWecomWorkbenchMiniAppIDFallsBackToWechatAppID(t *testing.T) {
+	var payload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &payload)
+		_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	oldCfg := config.AppConfig
+	config.AppConfig = &config.Config{
+		WeChat: config.WeChatConfig{AppID: "wx-from-wechat"},
+		Notification: config.NotificationConfig{
+			WecomWorkbench: config.NotificationWecom{
+				Enabled: true, CorpID: "c", AgentID: 7, Secret: "s",
+				APIBase: srv.URL, MsgType: "news",
+				MiniPagepath: "pages/order/order", DuplicateCheckInterval: 1800,
+			},
+		},
+	}
+	t.Cleanup(func() { config.AppConfig = oldCfg })
+
+	n := NewWecomWorkbenchNotifier(true, fakeTokenProvider{tok: "tok"})
+	_, err := n.Send(context.Background(),
+		NotificationMessage{
+			RecipeName: "红烧肉", AdderName: "张三", MealType: "dinner", Date: "2026-06-05",
+			RecipeCoverURL: "https://cdn.example.com/cover.jpg",
+		},
+		NotificationTarget{Secret: "useridA"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	article := firstNewsArticle(t, payload)
+	if article["appid"] != "wx-from-wechat" {
+		t.Fatalf("未配置 mini_appid 时应回退 wechat.appid: %v", article["appid"])
+	}
+}
+
+func TestWecomWorkbenchSendsNewsWithMiniJumpWithoutCover(t *testing.T) {
+	var payload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &payload)
+		_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	oldCfg := config.AppConfig
+	config.AppConfig = &config.Config{
+		WeChat: config.WeChatConfig{AppID: "wx123"},
+		Notification: config.NotificationConfig{
+			WecomWorkbench: config.NotificationWecom{
+				Enabled: true, CorpID: "c", AgentID: 7, Secret: "s",
+				APIBase: srv.URL, MsgType: "news",
+				MiniPagepath: "pages/order/order", DuplicateCheckInterval: 1800,
+			},
+		},
+	}
+	t.Cleanup(func() { config.AppConfig = oldCfg })
+
+	n := NewWecomWorkbenchNotifier(true, fakeTokenProvider{tok: "tok"})
+	_, err := n.Send(context.Background(),
+		NotificationMessage{RecipeName: "红烧肉", AdderName: "张三", MealType: "dinner", Date: "2026-06-05"},
+		NotificationTarget{Secret: "useridA"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if payload["msgtype"] != "news" {
+		t.Fatalf("配置小程序跳转时无封面也应发 news, got %v", payload["msgtype"])
+	}
+	article := firstNewsArticle(t, payload)
+	if article["appid"] != "wx123" || article["pagepath"] != "pages/order/order" {
+		t.Fatalf("应带小程序跳转字段: %v", article)
+	}
+}
+
+func TestWecomWorkbenchTextCardIgnoresMiniJump(t *testing.T) {
+	var payload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &payload)
+		_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	oldCfg := config.AppConfig
+	config.AppConfig = &config.Config{
+		WeChat: config.WeChatConfig{AppID: "wx123"},
+		Notification: config.NotificationConfig{
+			WecomWorkbench: config.NotificationWecom{
+				Enabled: true, CorpID: "c", AgentID: 7, Secret: "s",
+				APIBase: srv.URL, MsgType: "textcard", CardURL: "https://example.com",
+				MiniPagepath: "pages/order/order", DuplicateCheckInterval: 1800,
+			},
+		},
+	}
+	t.Cleanup(func() { config.AppConfig = oldCfg })
+
+	n := NewWecomWorkbenchNotifier(true, fakeTokenProvider{tok: "tok"})
+	_, err := n.Send(context.Background(),
+		NotificationMessage{RecipeName: "红烧肉", AdderName: "张三", MealType: "dinner", Date: "2026-06-05"},
+		NotificationTarget{Secret: "useridA"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if payload["msgtype"] != "textcard" {
+		t.Fatalf("无封面 textcard 模式应保持 textcard, got %v", payload["msgtype"])
+	}
+	card, ok := payload["textcard"].(map[string]any)
+	if !ok {
+		t.Fatalf("缺少 textcard: %v", payload)
+	}
+	if card["url"] != "https://example.com" {
+		t.Fatalf("textcard 应使用 card_url: %v", card["url"])
+	}
+	if _, hasAppid := card["appid"]; hasAppid {
+		t.Fatal("textcard 不支持小程序跳转，不应带 appid")
+	}
+}
+
+func firstNewsArticle(t *testing.T, payload map[string]any) map[string]any {
+	t.Helper()
+	news, ok := payload["news"].(map[string]any)
+	if !ok {
+		t.Fatalf("缺少 news 字段: %v", payload)
+	}
+	articles, ok := news["articles"].([]any)
+	if !ok || len(articles) == 0 {
+		t.Fatalf("news.articles 应非空: %v", news)
+	}
+	article, ok := articles[0].(map[string]any)
+	if !ok {
+		t.Fatalf("article 格式错误: %v", articles[0])
+	}
+	return article
+}
+
 func TestWecomWorkbenchSendsTextCardWithoutCover(t *testing.T) {
 	var payload map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

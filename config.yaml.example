@@ -76,6 +76,8 @@ notification:
     api_base: "https://qyapi.weixin.qq.com"
     msg_type: "news"
     card_url: "https://www.zzzjc.xin"
+    mini_appid: ""                    # 可选；留空则使用 wechat.appid
+    mini_pagepath: "pages/order/order" # 与 mini_appid 同时有效时，卡片点击打开小程序（优先于 card_url）
     default_cover_url: ""
     duplicate_check_interval: 1800
 

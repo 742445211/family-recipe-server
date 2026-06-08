@@ -78,6 +78,50 @@ func useNewsWithCover(msgType string, coverURL string) bool {
 	}
 }
 
+// wecomMiniJump 返回企微 news 卡片跳转小程序的 appid 与 pagepath。
+func wecomMiniJump(cfg config.NotificationWecom) (appid, pagepath string) {
+	if config.AppConfig == nil || !config.AppConfig.WecomMiniProgramJumpConfigured() {
+		return "", ""
+	}
+	pagepath = strings.TrimSpace(cfg.MiniPagepath)
+	if pagepath == "" {
+		return "", ""
+	}
+	appid = config.AppConfig.EffectiveWecomMiniAppID()
+	if appid == "" {
+		return "", ""
+	}
+	return appid, pagepath
+}
+
+// useWecomNews 是否发送 news 图文（有封面图，或 msg_type=news 且配置了小程序跳转）。
+func useWecomNews(cfg config.NotificationWecom, coverURL string) bool {
+	if useNewsWithCover(cfg.MsgType, coverURL) {
+		return true
+	}
+	appid, pagepath := wecomMiniJump(cfg)
+	return appid != "" && pagepath != "" && strings.ToLower(strings.TrimSpace(cfg.MsgType)) == "news"
+}
+
+// buildNewsArticle 组装企微 news 图文条目。
+func buildNewsArticle(cfg config.NotificationWecom, msg NotificationMessage, coverURL string) map[string]string {
+	article := map[string]string{
+		"title":       cardTitle(msg),
+		"description": BuildOrderNewsDescription(msg),
+		"btntxt":      "查看详情",
+	}
+	if coverURL != "" {
+		article["picurl"] = coverURL
+	}
+	if appid, pagepath := wecomMiniJump(cfg); appid != "" {
+		article["appid"] = appid
+		article["pagepath"] = pagepath
+	} else {
+		article["url"] = wecomCardURL(cfg)
+	}
+	return article
+}
+
 func (n *WecomWorkbenchNotifier) Channel() string { return "wecom_workbench" }
 
 func (n *WecomWorkbenchNotifier) Enabled() bool {
@@ -144,17 +188,11 @@ func (n *WecomWorkbenchNotifier) Send(ctx context.Context, msg NotificationMessa
 func (n *WecomWorkbenchNotifier) applyWecomPayload(payload map[string]any, cfg config.NotificationWecom, msg NotificationMessage) {
 	cover := recipeCoverURL(msg, cfg)
 	switch {
-	case useNewsWithCover(cfg.MsgType, cover):
-		// news 图文：顶部 picurl 展示菜品封面（企微 textcard 不支持配图）。
+	case useWecomNews(cfg, cover):
+		// news 图文：可带 picurl 封面；配置 appid+pagepath 时点击直达关联小程序。
 		payload["msgtype"] = "news"
 		payload["news"] = map[string]any{
-			"articles": []map[string]string{{
-				"title":       cardTitle(msg),
-				"description": BuildOrderNewsDescription(msg),
-				"url":         wecomCardURL(cfg),
-				"picurl":      cover,
-				"btntxt":      "查看详情",
-			}},
+			"articles": []map[string]string{buildNewsArticle(cfg, msg, cover)},
 		}
 	case isWecomCardMode(cfg.MsgType):
 		// textcard 文本卡片：无封面时的兜底样式。

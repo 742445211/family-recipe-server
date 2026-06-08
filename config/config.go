@@ -147,7 +147,9 @@ type NotificationWecom struct {
 	Secret                 string `yaml:"secret"`
 	APIBase                string `yaml:"api_base"`
 	MsgType                string `yaml:"msg_type"`           // text / textcard / news（图文卡片，顶部展示菜品封面）
-	CardURL                string `yaml:"card_url"`           // 卡片点击跳转地址
+	CardURL                string `yaml:"card_url"`           // 卡片 H5 跳转地址（未配置小程序跳转时使用）
+	MiniAppID              string `yaml:"mini_appid"`         // 卡片跳转小程序 AppID（空则回退 wechat.appid）
+	MiniPagepath           string `yaml:"mini_pagepath"`      // 卡片跳转小程序页面路径，与 mini_appid 同时配置时优先于 card_url
 	DefaultCoverURL        string `yaml:"default_cover_url"`  // 菜品无封面时的默认顶部图片（可选）
 	DuplicateCheckInterval int    `yaml:"duplicate_check_interval"`
 }
@@ -208,6 +210,25 @@ func (c *Config) EffectiveTemplateID() string {
 		return c.Notification.WeChatSubscribe.TemplateID
 	}
 	return c.WeChat.TemplateID
+}
+
+// EffectiveWecomMiniAppID 返回企微卡片跳转小程序 AppID（wecom_workbench 块优先，回退 wechat.appid）。
+func (c *Config) EffectiveWecomMiniAppID() string {
+	if c == nil {
+		return ""
+	}
+	if id := strings.TrimSpace(c.Notification.WecomWorkbench.MiniAppID); id != "" {
+		return id
+	}
+	return strings.TrimSpace(c.WeChat.AppID)
+}
+
+// WecomMiniProgramJumpConfigured 是否已配置企微卡片跳转小程序（appid 与 pagepath 均非空）。
+func (c *Config) WecomMiniProgramJumpConfigured() bool {
+	if c == nil {
+		return false
+	}
+	return c.EffectiveWecomMiniAppID() != "" && strings.TrimSpace(c.Notification.WecomWorkbench.MiniPagepath) != ""
 }
 
 // EffectiveMiniprogramState 返回小程序跳转版本。

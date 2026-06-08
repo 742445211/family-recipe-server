@@ -1,8 +1,10 @@
 package wechattoken
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"recipe-server/config"
@@ -40,6 +42,70 @@ func TestWecomTokenFetchAndCache(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("应缓存 token, calls=%d", calls)
+	}
+}
+
+func TestWecomGetUseridByMobile(t *testing.T) {
+	var gotMobile string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/gettoken"):
+			_, _ = w.Write([]byte(`{"access_token":"tok","expires_in":7200}`))
+		case strings.Contains(r.URL.Path, "/user/getuserid"):
+			if r.URL.Query().Get("access_token") != "tok" {
+				t.Fatalf("缺少 access_token: %s", r.URL.RawQuery)
+			}
+			b, _ := io.ReadAll(r.Body)
+			gotMobile = string(b)
+			_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok","userid":"zhangsan"}`))
+		default:
+			t.Fatalf("未预期的请求: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	oldCfg := config.AppConfig
+	config.AppConfig = &config.Config{
+		Notification: config.NotificationConfig{
+			WecomWorkbench: config.NotificationWecom{
+				CorpID: "c", Secret: "s", APIBase: srv.URL,
+			},
+		},
+	}
+	t.Cleanup(func() { config.AppConfig = oldCfg })
+
+	userid, err := NewWecomToken().GetUseridByMobile("13800138000")
+	if err != nil {
+		t.Fatalf("GetUseridByMobile: %v", err)
+	}
+	if userid != "zhangsan" {
+		t.Fatalf("userid: got %q", userid)
+	}
+	if !strings.Contains(gotMobile, "13800138000") {
+		t.Fatalf("请求体应包含手机号: %s", gotMobile)
+	}
+}
+
+func TestWecomGetUseridByMobileNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/gettoken") {
+			_, _ = w.Write([]byte(`{"access_token":"tok","expires_in":7200}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"errcode":60111,"errmsg":"userid not found"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	oldCfg := config.AppConfig
+	config.AppConfig = &config.Config{
+		Notification: config.NotificationConfig{
+			WecomWorkbench: config.NotificationWecom{CorpID: "c", Secret: "s", APIBase: srv.URL},
+		},
+	}
+	t.Cleanup(func() { config.AppConfig = oldCfg })
+
+	if _, err := NewWecomToken().GetUseridByMobile("13800138000"); err == nil {
+		t.Fatal("查询失败应返回错误")
 	}
 }
 

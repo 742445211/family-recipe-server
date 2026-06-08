@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,13 +18,16 @@ import (
 )
 
 func TestParseAIRecommendJSON(t *testing.T) {
-	raw := `{"items":[{"name":"番茄炒蛋","category":"家常菜","difficulty":"easy","cook_time":15,"ingredients":"[{\"name\":\"番茄\",\"amount\":\"2个\"}]","seasonings":"[]","steps":"[\"切块\"]","tips":"先炒蛋","reason":"快手"}]}`
+	raw := `{"items":[{"name":"番茄炒蛋","category":"家常菜","meal_type":"lunch","difficulty":"easy","cook_time":15,"ingredients":"[{\"name\":\"番茄\",\"amount\":\"2个\"}]","seasonings":"[]","steps":"[\"切块\"]","tips":"先炒蛋","reason":"快手"}]}`
 	items, err := parseAIRecommendJSON(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(items) != 1 || items[0].Name != "番茄炒蛋" {
 		t.Fatalf("%+v", items)
+	}
+	if items[0].MealType != "lunch" {
+		t.Fatalf("应解析 meal_type: %+v", items[0])
 	}
 }
 
@@ -99,7 +103,7 @@ func TestAIRecommendServiceRecommend(t *testing.T) {
 	ai.baseURL = srv.URL
 
 	svc := NewAIRecommendService(db, store, ai, ctxSvc, NewAIRateLimitService(store))
-	result, err := svc.Recommend(context.Background(), fid, uid)
+	result, err := svc.Recommend(context.Background(), fid, uid, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,6 +120,49 @@ func TestAIRecommendServiceRecommend(t *testing.T) {
 	}
 	if draft.FamilyID != fid || draft.Name != "新菜" {
 		t.Fatalf("%+v", draft)
+	}
+}
+
+func TestAIRecommendUsesMealOverride(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
+	mr, _ := miniredis.Run()
+	t.Cleanup(mr.Close)
+
+	var gotPrompt string
+	llmBody := `{"items":[{"name":"皮蛋瘦肉粥","category":"粥","difficulty":"easy","cook_time":20,"ingredients":"[]","seasonings":"[]","steps":"[]","tips":"","reason":"适合早餐"}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotPrompt = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"choices": []map[string]interface{}{{"message": map[string]string{"content": llmBody}}},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	config.AppConfig = &config.Config{
+		AI:      config.AIConfig{APIKey: "k", BaseURL: srv.URL, Model: "t", RecommendCount: 5},
+		Weather: config.WeatherConfig{Enabled: false},
+	}
+	store := cache.NewRedisCache(mr.Addr(), "", 0)
+	ai := NewAIServiceWithClient(&http.Client{})
+	ai.baseURL = srv.URL
+	svc := NewAIRecommendService(db, store, ai, NewAIContextService(db, NewWeatherService(store, nil)), NewAIRateLimitService(store))
+
+	result, err := svc.Recommend(context.Background(), fid, uid, "breakfast")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotPrompt, "早餐") {
+		t.Fatalf("提示词应包含指定餐次「早餐」: %s", gotPrompt)
+	}
+	var draft AIRecipeDraft
+	if err := store.GetJSON(context.Background(), aiItemKey(result.Items[0].ItemID), &draft); err != nil {
+		t.Fatal(err)
+	}
+	if draft.MealType != "breakfast" {
+		t.Fatalf("草稿 meal_type 应回落为指定餐次 breakfast: %+v", draft)
 	}
 }
 
@@ -155,7 +202,7 @@ func TestAIRecommendFiltersExistingRecipes(t *testing.T) {
 	ai := NewAIServiceWithClient(&http.Client{})
 	ai.baseURL = srv.URL
 	svc := NewAIRecommendService(db, store, ai, NewAIContextService(db, NewWeatherService(store, nil)), NewAIRateLimitService(store))
-	result, err := svc.Recommend(context.Background(), fid, uid)
+	result, err := svc.Recommend(context.Background(), fid, uid, "")
 	if err != nil {
 		t.Fatal(err)
 	}

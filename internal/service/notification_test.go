@@ -1,8 +1,16 @@
 package service
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"sort"
+	"sync"
 	"testing"
+	"time"
 
+	"recipe-server/config"
 	"recipe-server/internal/model"
 	"recipe-server/internal/testutil"
 )
@@ -97,6 +105,89 @@ func TestNotifyOrderCreatedSkipsWhenDisabled(t *testing.T) {
 	db.Model(&model.Notification{}).Where("order_id = ? AND receiver_user_id = ?", orderID, chefID).Count(&count)
 	if count != 0 {
 		t.Errorf("notification.enabled=false 时不应创建通知, got %d", count)
+	}
+}
+
+func TestNotifyOrderCreatedPushesEachChefWecom(t *testing.T) {
+	var mu sync.Mutex
+	var tousers []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/cgi-bin/gettoken" {
+			_, _ = w.Write([]byte(`{"access_token":"tok","expires_in":7200}`))
+			return
+		}
+		if r.URL.Path == "/cgi-bin/message/send" {
+			b, _ := io.ReadAll(r.Body)
+			var payload struct {
+				ToUser string `json:"touser"`
+			}
+			_ = json.Unmarshal(b, &payload)
+			mu.Lock()
+			tousers = append(tousers, payload.ToUser)
+			mu.Unlock()
+			_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"errcode":0}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	config.AppConfig = &config.Config{
+		Notification: config.NotificationConfig{
+			Enabled: true,
+			Retry:   config.NotificationRetry{MaxAttempts: 3, IntervalsSec: []int{60, 300, 900}},
+			WecomWorkbench: config.NotificationWecom{
+				Enabled: true, CorpID: "c", AgentID: 1, Secret: "s",
+				APIBase: srv.URL, MsgType: "text", DuplicateCheckInterval: 1800,
+			},
+		},
+	}
+
+	db := testutil.SetupTestDB(t)
+	adder := model.User{OpenID: "adder-x", Nickname: "点菜人"}
+	chefA := model.User{OpenID: "chefA", Nickname: "厨师A"}
+	chefB := model.User{OpenID: "chefB", Nickname: "厨师B"}
+	db.Create(&adder)
+	db.Create(&chefA)
+	db.Create(&chefB)
+	family := model.Family{Name: "多厨之家", InviteCode: "MULTI1"}
+	db.Create(&family)
+	db.Create(&model.FamilyMember{FamilyID: family.ID, UserID: adder.ID, Role: "member"})
+	db.Create(&model.FamilyMember{FamilyID: family.ID, UserID: chefA.ID, Role: "member", IsChef: true})
+	db.Create(&model.FamilyMember{FamilyID: family.ID, UserID: chefB.ID, Role: "member", IsChef: true})
+	db.Create(&model.NotificationChannel{UserID: chefA.ID, Channel: model.ChannelWecomWorkbench, Enabled: true, Secret: "useridA"})
+	db.Create(&model.NotificationChannel{UserID: chefB.ID, Channel: model.ChannelWecomWorkbench, Enabled: true, Secret: "useridB"})
+	recipe := model.Recipe{Name: "红烧肉", Category: "荤菜", CreatorID: adder.ID, FamilyID: family.ID}
+	db.Create(&recipe)
+	order := model.DailyOrder{FamilyID: family.ID, Date: "2026-06-05", MealType: "dinner", RecipeID: recipe.ID, AddedBy: adder.ID, Quantity: 1}
+	db.Create(&order)
+
+	svc := NewNotificationService(db, NewWebSocketHub())
+	if err := svc.NotifyOrderCreated(order.ID); err != nil {
+		t.Fatalf("NotifyOrderCreated: %v", err)
+	}
+
+	var got []string
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		got = append([]string(nil), tousers...)
+		mu.Unlock()
+		if len(got) >= 2 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	sort.Strings(got)
+	if len(got) != 2 || got[0] != "useridA" || got[1] != "useridB" {
+		t.Fatalf("应给每个厨师各推送一次企微，got=%v", got)
+	}
+
+	var nCount int64
+	db.Model(&model.Notification{}).Where("order_id = ?", order.ID).Count(&nCount)
+	if nCount != 2 {
+		t.Fatalf("应为每个厨师创建通知，got=%d", nCount)
 	}
 }
 

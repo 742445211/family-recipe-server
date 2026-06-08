@@ -83,6 +83,38 @@ func BuildOrderContent(msg NotificationMessage) string {
 	return b.String()
 }
 
+// BuildOrderCardDescription 构建企业微信 textcard 卡片描述（支持有限 HTML：gray/highlight/normal）。
+func BuildOrderCardDescription(msg NotificationMessage) string {
+	meal := MealName(msg.MealType)
+	var b strings.Builder
+	b.WriteString(`<div class="gray">`)
+	b.WriteString(dateutil.FormatYMD(msg.Date))
+	if meal != "" {
+		b.WriteString(" ")
+		b.WriteString(meal)
+	}
+	b.WriteString("</div>")
+	b.WriteString(`<div class="highlight">`)
+	b.WriteString(msg.RecipeName)
+	b.WriteString(" 1份</div>")
+	if strings.TrimSpace(msg.AdderName) != "" {
+		b.WriteString(`<div class="normal">点菜人：`)
+		b.WriteString(msg.AdderName)
+		b.WriteString("</div>")
+	}
+	if ing := FormatIngredients(msg.Ingredients); ing != "" {
+		b.WriteString(`<div class="normal">食材：`)
+		b.WriteString(truncateRunes(ing, 60))
+		b.WriteString("</div>")
+	}
+	if strings.TrimSpace(msg.Note) != "" {
+		b.WriteString(`<div class="normal">备注：`)
+		b.WriteString(msg.Note)
+		b.WriteString("</div>")
+	}
+	return b.String()
+}
+
 // ErrSkipped 表示通道跳过（如用户离线）。
 var ErrSkipped = errors.New("notification skipped")
 

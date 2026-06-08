@@ -145,7 +145,8 @@ type NotificationWecom struct {
 	AgentID                int    `yaml:"agent_id"`
 	Secret                 string `yaml:"secret"`
 	APIBase                string `yaml:"api_base"`
-	MsgType                string `yaml:"msg_type"`
+	MsgType                string `yaml:"msg_type"`  // text 或 textcard（卡片），默认 textcard
+	CardURL                string `yaml:"card_url"`  // textcard 点击跳转地址
 	DuplicateCheckInterval int    `yaml:"duplicate_check_interval"`
 }
 
@@ -300,7 +301,10 @@ func applyNotificationDefaults(c *Config) {
 		n.WecomWorkbench.APIBase = "https://qyapi.weixin.qq.com"
 	}
 	if n.WecomWorkbench.MsgType == "" {
-		n.WecomWorkbench.MsgType = "text"
+		n.WecomWorkbench.MsgType = "textcard"
+	}
+	if n.WecomWorkbench.CardURL == "" {
+		n.WecomWorkbench.CardURL = "https://www.zzzjc.xin"
 	}
 	if n.WecomWorkbench.DuplicateCheckInterval == 0 {
 		n.WecomWorkbench.DuplicateCheckInterval = 1800

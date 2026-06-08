@@ -28,6 +28,20 @@ func NewWecomWorkbenchNotifier(enabled bool, token wechattoken.Provider) *WecomW
 	}
 }
 
+func cardTitle(msg NotificationMessage) string {
+	if strings.TrimSpace(msg.Title) != "" {
+		return msg.Title
+	}
+	return "有新的点菜"
+}
+
+func wecomCardURL(cfg config.NotificationWecom) string {
+	if strings.TrimSpace(cfg.CardURL) != "" {
+		return cfg.CardURL
+	}
+	return "https://www.zzzjc.xin"
+}
+
 func (n *WecomWorkbenchNotifier) Channel() string { return "wecom_workbench" }
 func (n *WecomWorkbenchNotifier) Enabled() bool {
 	cfg := config.AppConfig.Notification.WecomWorkbench
@@ -53,18 +67,28 @@ func (n *WecomWorkbenchNotifier) Send(ctx context.Context, msg NotificationMessa
 	}
 
 	cfg := config.AppConfig.Notification.WecomWorkbench
-	content := BuildOrderContent(msg)
-	if msg.Content != "" {
-		content = msg.Content
-	}
 
 	payload := map[string]any{
 		"touser":                   userid,
-		"msgtype":                  "text",
 		"agentid":                  cfg.AgentID,
-		"text":                     map[string]string{"content": content},
 		"enable_duplicate_check":   1,
 		"duplicate_check_interval": cfg.DuplicateCheckInterval,
+	}
+	if strings.EqualFold(cfg.MsgType, "textcard") {
+		payload["msgtype"] = "textcard"
+		payload["textcard"] = map[string]string{
+			"title":       cardTitle(msg),
+			"description": BuildOrderCardDescription(msg),
+			"url":         wecomCardURL(cfg),
+			"btntxt":      "查看详情",
+		}
+	} else {
+		content := BuildOrderContent(msg)
+		if msg.Content != "" {
+			content = msg.Content
+		}
+		payload["msgtype"] = "text"
+		payload["text"] = map[string]string{"content": content}
 	}
 	body, _ := json.Marshal(payload)
 	base := trimSlash(cfg.APIBase)

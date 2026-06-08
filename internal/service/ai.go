@@ -97,6 +97,7 @@ func (s *AIService) recommendStructured(actx *AIRecommendContext, count int, use
 3. 【丰富多样】菜品之间在菜系、口味、烹饪方式（炒/炖/蒸/凉拌/汤/烤等）和主食材上尽量不重复，避免连续多道同类
 4. 【因地制宜】结合当前天气与季节灵活调整（热天清爽、冷天暖胃、雨天汤品、应季食材等）
 5. 家常易做、食材易得；reason 字段要结合「餐次/天气/为什么是新菜」给出贴合今天的推荐理由
+6. category 优先从上下文「家庭常用分类」中选择；确实没有合适项时可新增简短分类名（如川菜、粥品）
 
 必须只返回合法 JSON，不要 markdown 代码块，格式如下：
 {"items":[{"name":"菜名","category":"分类","meal_type":"breakfast或lunch或dinner或supper","difficulty":"easy或medium或hard","cook_time":分钟数,"ingredients":"[{\"name\":\"食材\",\"amount\":\"用量\"}]","seasonings":"[]","steps":"[\"步骤1\"]","tips":"小贴士","reason":"推荐理由"}]}

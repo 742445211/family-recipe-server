@@ -90,19 +90,21 @@ type AIRecommendService struct {
 	ai        *AIService
 	ctxSvc    *AIContextService
 	rateLimit *AIRateLimitService
-	recipes   *RecipeService
-	orders    *OrderService
+	recipes    *RecipeService
+	orders     *OrderService
+	categories *CategoryService
 }
 
 func NewAIRecommendService(db *gorm.DB, store cache.Store, ai *AIService, ctxSvc *AIContextService, rateLimit *AIRateLimitService) *AIRecommendService {
 	return &AIRecommendService{
-		db:        db,
-		store:     store,
-		ai:        ai,
-		ctxSvc:    ctxSvc,
-		rateLimit: rateLimit,
-		recipes:   NewRecipeService(db),
-		orders:    NewOrderService(db),
+		db:         db,
+		store:      store,
+		ai:         ai,
+		ctxSvc:     ctxSvc,
+		rateLimit:  rateLimit,
+		recipes:    NewRecipeService(db),
+		orders:     NewOrderService(db),
+		categories: NewCategoryService(db),
 	}
 }
 
@@ -177,12 +179,16 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 		if id, ok := nameToID[strings.TrimSpace(in.Name)]; ok {
 			existingID = &id
 		}
+		category, err := s.categories.Ensure(familyID, defaultStr(in.Category, "其他"))
+		if err != nil {
+			return nil, err
+		}
 		draft := AIRecipeDraft{
 			ItemID:           itemID,
 			BatchID:          batchID,
 			FamilyID:         familyID,
 			Name:             strings.TrimSpace(in.Name),
-			Category:         defaultStr(in.Category, "其他"),
+			Category:         category,
 			MealType:         normalizeMealType(in.MealType, actx.Meal.Type),
 			Difficulty:       normalizeDifficulty(in.Difficulty),
 			CookTime:         in.CookTime,
@@ -253,9 +259,13 @@ func (s *AIRecommendService) ImportRecipe(ctx context.Context, itemID string, fa
 	if id, ok := s.familyRecipeNameMap(familyID)[draft.Name]; ok {
 		return nil, fmt.Errorf("%w: id=%d", ErrRecipeExists, id)
 	}
+	category, err := s.categories.Ensure(familyID, draft.Category)
+	if err != nil {
+		return nil, err
+	}
 	r := &model.Recipe{
 		Name:        draft.Name,
-		Category:    draft.Category,
+		Category:    category,
 		Difficulty:  draft.Difficulty,
 		CookTime:    draft.CookTime,
 		Ingredients: draft.Ingredients,

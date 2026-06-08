@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"recipe-server/internal/middleware"
 	"recipe-server/internal/model"
@@ -77,6 +78,14 @@ func (h *RecipeHandler) Create(c *gin.Context) {
 		return
 	}
 
+	catSvc := service.NewCategoryService(h.db)
+	category, err := catSvc.Ensure(r.FamilyID, r.Category)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "分类保存失败"})
+		return
+	}
+	r.Category = category
+
 	// 3. 调用 service 层创建菜谱
 	if err := h.svc.Create(&r); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建失败: " + err.Error()})
@@ -119,6 +128,15 @@ func (h *RecipeHandler) Update(c *gin.Context) {
 	if familyID == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请先加入家庭"})
 		return
+	}
+	if strings.TrimSpace(r.Category) != "" {
+		catSvc := service.NewCategoryService(h.db)
+		if category, err := catSvc.Ensure(familyID, r.Category); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "分类保存失败"})
+			return
+		} else {
+			r.Category = category
+		}
 	}
 	if err := h.svc.Update(&r, familyID); err != nil {
 		if errors.Is(err, service.ErrRecipeNotInFamily) {

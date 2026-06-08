@@ -219,6 +219,43 @@ func strconvQuote(s string) string {
 	return string(b)
 }
 
+func TestAIRecommendEnsuresNewCategory(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
+	mr, _ := miniredis.Run()
+	t.Cleanup(mr.Close)
+
+	llmBody := `{"items":[{"name":"新菜","category":"湘菜","difficulty":"medium","cook_time":30,"ingredients":"[]","seasonings":"[]","steps":"[]","tips":"","reason":"开胃"}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + strconvQuote(llmBody) + `}}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	config.AppConfig = &config.Config{
+		AI:      config.AIConfig{BaseURL: srv.URL, Model: "t", RateLimit: config.AIRateLimitConfig{Enabled: false}},
+		Weather: config.WeatherConfig{Enabled: false},
+	}
+	store := cache.NewRedisCache(mr.Addr(), "", 0)
+	ai := NewAIServiceWithClient(&http.Client{})
+	ai.baseURL = srv.URL
+	svc := NewAIRecommendService(db, store, ai, NewAIContextService(db, NewWeatherService(store, nil)), NewAIRateLimitService(store))
+
+	result, err := svc.Recommend(context.Background(), fid, uid, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	db.Model(&model.RecipeCategory{}).Where("family_id = ? AND name = ?", fid, "湘菜").Count(&count)
+	if count != 1 {
+		t.Fatalf("AI 推荐后应写入新分类「湘菜」, count=%d", count)
+	}
+	var draft AIRecipeDraft
+	_ = store.GetJSON(context.Background(), aiItemKey(result.Items[0].ItemID), &draft)
+	if draft.Category != "湘菜" {
+		t.Fatalf("草稿分类应为湘菜: %+v", draft)
+	}
+}
+
 func TestImportAIRecipeFromCache(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	uid, fid := testutil.SeedUserAndFamily(t, db)

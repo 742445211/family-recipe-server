@@ -60,6 +60,18 @@ type FamilyMember struct {
 // TableName 指定表名为 family_members。
 func (FamilyMember) TableName() string { return "family_members" }
 
+// RecipeCategory 家庭菜谱分类（与 recipes.category 字段对应，供筛选与 AI 推荐复用）。
+type RecipeCategory struct {
+	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+	FamilyID  uint64    `gorm:"not null;uniqueIndex:uk_family_category_name" json:"family_id"`
+	Name      string    `gorm:"size:50;not null;uniqueIndex:uk_family_category_name" json:"name"`
+	SortOrder int       `gorm:"default:0" json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// TableName 指定表名为 recipe_categories。
+func (RecipeCategory) TableName() string { return "recipe_categories" }
+
 // Recipe 菜谱表，记录每道菜的详细信息。
 // 食材（Ingredients）、调料（Seasonings）、步骤（Steps）以 JSON 数组存储。
 type Recipe struct {

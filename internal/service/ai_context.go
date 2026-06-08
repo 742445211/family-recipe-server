@@ -50,6 +50,7 @@ func NormalizeMealSlot(s string) (MealSlot, bool) {
 // AIRecommendContext 推荐上下文。
 type AIRecommendContext struct {
 	RecipeNames  []string
+	CategoryNames []string
 	OrderHistory []string
 	WeatherLine  string
 	Meal         MealSlot // 本次推荐的目标餐次
@@ -57,16 +58,18 @@ type AIRecommendContext struct {
 
 // AIContextService 组装 AI 推荐上下文。
 type AIContextService struct {
-	db      *gorm.DB
-	orders  *OrderService
-	weather *WeatherService
+	db         *gorm.DB
+	orders     *OrderService
+	weather    *WeatherService
+	categories *CategoryService
 }
 
 func NewAIContextService(db *gorm.DB, weather *WeatherService) *AIContextService {
 	return &AIContextService{
-		db:      db,
-		orders:  NewOrderService(db),
-		weather: weather,
+		db:         db,
+		orders:     NewOrderService(db),
+		weather:    weather,
+		categories: NewCategoryService(db),
 	}
 }
 
@@ -96,11 +99,18 @@ func (s *AIContextService) Build(familyID uint64) (*AIRecommendContext, error) {
 		weatherLine = s.weather.SummaryForPrompt(context.Background())
 	}
 
+	_ = s.categories.SyncFromRecipes(familyID)
+	categoryNames, err := s.categories.ListNames(familyID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &AIRecommendContext{
-		RecipeNames:  names,
-		OrderHistory: history,
-		WeatherLine:  weatherLine,
-		Meal:         InferMealSlot(time.Now()),
+		RecipeNames:   names,
+		CategoryNames: categoryNames,
+		OrderHistory:  history,
+		WeatherLine:   weatherLine,
+		Meal:          InferMealSlot(time.Now()),
 	}, nil
 }
 
@@ -126,8 +136,12 @@ func FormatContextBlock(ctx *AIRecommendContext) string {
 	if ctx.Meal.Name != "" {
 		mealLine = fmt.Sprintf("当前餐次：%s（请重点推荐适合「%s」的菜品）\n", ctx.Meal.Name, ctx.Meal.Name)
 	}
+	categoryLine := "（暂无，可自由新增）"
+	if len(ctx.CategoryNames) > 0 {
+		categoryLine = strings.Join(ctx.CategoryNames, "、")
+	}
 	return fmt.Sprintf(
-		"%s家庭已有菜谱（禁止推荐以下菜名及近似菜名）：%s\n%s\n当前天气：%s",
-		mealLine, existing, recent, ctx.WeatherLine,
+		"%s家庭已有菜谱（禁止推荐以下菜名及近似菜名）：%s\n家庭常用分类（优先选用，若无合适可新增）：%s\n%s\n当前天气：%s",
+		mealLine, existing, categoryLine, recent, ctx.WeatherLine,
 	)
 }

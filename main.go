@@ -34,17 +34,23 @@ func main() {
 	}
 
 	// 3. 自动迁移：根据模型结构体创建/更新表结构
-	db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&model.Family{},
 		&model.User{},
 		&model.FamilyMember{},
+		&model.RecipeCategory{},
 		&model.Recipe{},
 		&model.DailyOrder{},
 		&model.Favorite{},
 		&model.Notification{},
 		&model.NotificationDelivery{},
 		&model.NotificationChannel{},
-	)
+	); err != nil {
+		log.Fatalf("数据库迁移失败: %v", err)
+	}
+	if err := service.NewCategoryService(db).SyncAllFamilies(); err != nil {
+		log.Printf("警告: 同步菜谱分类失败: %v", err)
+	}
 
 	wsHub := service.NewWebSocketHub()
 	notifySvc := service.NewNotificationService(db, wsHub)
@@ -104,6 +110,9 @@ func main() {
 			auth.GET("/families", familyH.List)                 // 我的家庭列表
 			auth.GET("/families/:id/members", familyH.Members)  // 家庭成员列表
 			auth.POST("/families/chef", familyH.ToggleChef)     // 切换厨师身份
+
+			categoryH := handler.NewCategoryHandler(db)
+			auth.GET("/categories", categoryH.List)          // 菜谱分类列表
 
 			// 菜谱写操作（需登录）
 			auth.POST("/recipes", recipeH.Create)            // 创建菜谱

@@ -6,20 +6,28 @@ import (
 	"recipe-server/config"
 )
 
-// EnsureAppConfig 保证测试环境有可用的 JWT 等基础配置。
+// EnsureAppConfig 保证测试环境有可用的配置。
+// 优先加载项目根目录 config.yaml（能读到则使用其中的值），仅对缺失字段补测试默认值。
 func EnsureAppConfig() {
 	if config.AppConfig == nil {
-		_ = config.Load("../../config.yaml")
+		LoadConfigIfPresent()
 	}
 	if config.AppConfig == nil {
 		config.AppConfig = &config.Config{}
 	}
+	applyTestConfigDefaults()
+}
+
+func applyTestConfigDefaults() {
 	if config.AppConfig.JWT.Secret == "" {
-		config.AppConfig.JWT = config.JWTConfig{Secret: "test-secret", ExpireHours: 24}
+		config.AppConfig.JWT.Secret = "test-secret"
+	}
+	if config.AppConfig.JWT.ExpireHours == 0 {
+		config.AppConfig.JWT.ExpireHours = 24
 	}
 }
 
-// InitTestConfig 测试默认开启通知。
+// InitTestConfig 测试默认开启通知（保留 config.yaml 中已有配置，仅补缺失项）。
 func InitTestConfig() {
 	InitTestConfigNotification(true)
 }

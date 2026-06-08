@@ -84,7 +84,7 @@ pkg/jwt/                       # JWT 签发与解析
 2. **Green**：以最小实现让测试通过。
 3. **Refactor**：在测试保护下整理代码，改后必须再次 `go test` 全绿。
 4. **覆盖范围**：`service`、`handler`、`middleware`、`config`、`pkg/*`、`notifier`、`wechattoken` 等包中新增/变更的导出逻辑或分支，必须有对应单元测试；纯 HTTP 转发且无分支的 handler 也至少覆盖参数校验与鉴权路径。
-5. **测试复用**：内存 DB 与种子数据统一使用 `internal/testutil`（`SetupTestDB`、`SeedUserAndFamily`、`EnsureAppConfig` 等），避免各包重复造轮子。
+5. **测试复用**：内存 DB 与种子数据统一使用 `internal/testutil`（`SetupTestDB`、`SeedUserAndFamily`、`EnsureAppConfig` 等），避免各包重复造轮子。`EnsureAppConfig` 会从当前目录向上查找 `config.yaml`，**能读到则使用文件中的配置**，仅对 JWT 等缺失字段补测试默认值。
 6. **外部依赖**：微信/AI/天气/OSS 等 HTTP 调用在测试中必须用 `httptest` 或注入 mock client，禁止依赖生产密钥或真实外网（OSS 集成测试无配置时 `t.Skip`）。
 
 ### 测试位置

@@ -25,6 +25,7 @@ func TestFavoriteAddListRemove(t *testing.T) {
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", userID)
+		c.Set("family_id", familyID)
 		c.Next()
 	})
 	r.POST("/api/favorites/:id", h.Add)

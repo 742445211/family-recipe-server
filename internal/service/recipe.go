@@ -14,10 +14,15 @@
 package service
 
 import (
+	"errors"
+
 	"recipe-server/internal/model"
 
 	"gorm.io/gorm"
 )
+
+// ErrRecipeNotInFamily 菜谱不存在或不属于当前家庭。
+var ErrRecipeNotInFamily = errors.New("菜谱不存在或不属于当前家庭")
 
 // RecipeService 菜谱管理服务，封装 Recipe 的数据库操作。
 // 通过 GORM 操作 recipes 表，支持多条件查询和关联预加载。
@@ -48,7 +53,16 @@ func NewRecipeService(db *gorm.DB) *RecipeService {
 //
 //	db.Create(r) → INSERT INTO recipes (...) VALUES (...)
 func (s *RecipeService) Create(r *model.Recipe) error {
-	return s.db.Create(r).Error
+	wantPublic := r.IsPublic
+	if err := s.db.Omit("IsPublic").Create(r).Error; err != nil {
+		return err
+	}
+	// 显式落库 is_public（含 false），避免 GORM/SQLite 对 bool 零值的默认行为。
+	if err := s.db.Model(r).UpdateColumn("is_public", wantPublic).Error; err != nil {
+		return err
+	}
+	r.IsPublic = wantPublic
+	return nil
 }
 
 // Update 更新菜谱信息（按主键 ID 匹配，只更新非零值字段）。
@@ -67,8 +81,15 @@ func (s *RecipeService) Create(r *model.Recipe) error {
 // 说明:
 //   - Updates 使用 struct 时只更新非零值字段，零值字段不会写入数据库
 //   - 如需将某字段重置为零值，应使用 Update + map 或 UpdateColumn
-func (s *RecipeService) Update(r *model.Recipe) error {
-	return s.db.Model(&model.Recipe{}).Where("id = ?", r.ID).Updates(r).Error
+func (s *RecipeService) Update(r *model.Recipe, familyID uint64) error {
+	res := s.db.Model(&model.Recipe{}).Where("id = ? AND family_id = ?", r.ID, familyID).Updates(r)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrRecipeNotInFamily
+	}
+	return nil
 }
 
 // Delete 删除菜谱（软删除），仅允许创建者本人操作。
@@ -88,8 +109,15 @@ func (s *RecipeService) Update(r *model.Recipe) error {
 // 说明:
 //   - GORM 对软删除模型执行 Delete 时 UPDATE deleted_at 而非物理删除
 //   - creator_id = userID 条件确保只有创建者可以删除
-func (s *RecipeService) Delete(id, userID uint64) error {
-	return s.db.Where("id = ? AND creator_id = ?", id, userID).Delete(&model.Recipe{}).Error
+func (s *RecipeService) Delete(id, userID, familyID uint64) error {
+	res := s.db.Where("id = ? AND creator_id = ? AND family_id = ?", id, userID, familyID).Delete(&model.Recipe{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrRecipeNotInFamily
+	}
+	return nil
 }
 
 // GetByID 根据 ID 获取菜谱详情，同时预加载创建者信息。
@@ -106,9 +134,18 @@ func (s *RecipeService) Delete(id, userID uint64) error {
 //	db.Preload("Creator").First(&r, id)
 //	→ SELECT * FROM recipes WHERE id = ? AND deleted_at IS NULL LIMIT 1
 //	→ SELECT * FROM users WHERE id = ? (Preload Creator)
-func (s *RecipeService) GetByID(id uint64) (*model.Recipe, error) {
+// applyRecipeReadScope 读取可见范围：本家庭全部菜谱，或 is_public=1 的公开菜谱。
+func applyRecipeReadScope(q *gorm.DB, familyID uint64) *gorm.DB {
+	if familyID > 0 {
+		return q.Where("family_id = ? OR is_public = ?", familyID, true)
+	}
+	return q.Where("is_public = ?", true)
+}
+
+func (s *RecipeService) GetByID(id, familyID uint64) (*model.Recipe, error) {
 	var r model.Recipe
-	err := s.db.Preload("Creator").First(&r, id).Error
+	q := applyRecipeReadScope(s.db.Preload("Creator").Where("id = ?", id), familyID)
+	err := q.First(&r).Error
 	if err != nil {
 		return nil, err
 	}
@@ -145,11 +182,7 @@ func (s *RecipeService) List(familyID uint64, keyword, category string, page, pa
 	var recipes []model.Recipe
 	var total int64
 
-	// 构建基础查询，按需叠加过滤条件
-	query := s.db.Model(&model.Recipe{})
-	if familyID > 0 {
-		query = query.Where("family_id = ?", familyID)
-	}
+	query := applyRecipeReadScope(s.db.Model(&model.Recipe{}), familyID)
 	if keyword != "" {
 		// SQL LIKE 模糊匹配菜名（%keyword%）
 		query = query.Where("name LIKE ?", "%"+keyword+"%")
@@ -190,7 +223,14 @@ func (s *RecipeService) List(familyID uint64, keyword, category string, page, pa
 //   - 使用 gorm.Expr 构造 SQL 表达式，在数据库层面原子递增，避免并发读写竞争
 //   - UpdateColumn 不更新 updated_at 时间戳（保持原有的更新时间语义）
 //   - 通常在 recipe 被点菜并烹饪后调用，用于统计菜谱受欢迎程度
-func (s *RecipeService) IncrementCookCount(id uint64) error {
-	return s.db.Model(&model.Recipe{}).Where("id = ?", id).
-		UpdateColumn("cook_count", gorm.Expr("cook_count + 1")).Error
+func (s *RecipeService) IncrementCookCount(id, familyID uint64) error {
+	res := s.db.Model(&model.Recipe{}).Where("id = ? AND family_id = ?", id, familyID).
+		UpdateColumn("cook_count", gorm.Expr("cook_count + 1"))
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrRecipeNotInFamily
+	}
+	return nil
 }

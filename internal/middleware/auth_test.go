@@ -71,3 +71,42 @@ func TestAuthRequiredValidToken(t *testing.T) {
 		t.Fatalf("status: got %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+func TestOptionalAuthWithoutToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/recipes", OptionalAuth(), func(c *gin.Context) {
+		if GetUserID(c) != 0 || GetFamilyID(c) != 0 {
+			t.Fatalf("无 token 时应为 0, user=%d family=%d", GetUserID(c), GetFamilyID(c))
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/recipes", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d", w.Code)
+	}
+}
+
+func TestOptionalAuthWithValidToken(t *testing.T) {
+	old := config.AppConfig
+	config.AppConfig = &config.Config{JWT: config.JWTConfig{Secret: "test-secret", ExpireHours: 1}}
+	t.Cleanup(func() { config.AppConfig = old })
+
+	token, _ := jwtPkg.Generate("test-secret", 1, 9, "oid", 3)
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/recipes", OptionalAuth(), func(c *gin.Context) {
+		if GetUserID(c) != 9 || GetFamilyID(c) != 3 {
+			t.Fatalf("user=%d family=%d", GetUserID(c), GetFamilyID(c))
+		}
+		c.Status(http.StatusOK)
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/recipes", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d", w.Code)
+	}
+}

@@ -83,10 +83,10 @@ func main() {
 		authH := handler.NewAuthHandler(db)
 		api.POST("/auth/login", authH.Login) // 微信登录
 
-		// 公开的菜谱浏览（审核要求首页不能是登录页）
 		recipeH := handler.NewRecipeHandler(db)
-		api.GET("/recipes", recipeH.List)     // 菜谱列表（支持搜索）
-		api.GET("/recipes/:id", recipeH.Get)  // 菜谱详情
+		recipeBrowse := api.Group("", middleware.OptionalAuth())
+		recipeBrowse.GET("/recipes", recipeH.List)       // 菜谱列表（本家 + 公开）
+		recipeBrowse.GET("/recipes/:id", recipeH.Get)   // 菜谱详情（本家或公开）
 		api.GET("/weather", aiH.Weather)      // 天气（默认成都）
 		api.GET("/app/features", handler.NewAppHandler().Features) // 功能开关（公开）
 
@@ -105,7 +105,7 @@ func main() {
 			auth.GET("/families/:id/members", familyH.Members)  // 家庭成员列表
 			auth.POST("/families/chef", familyH.ToggleChef)     // 切换厨师身份
 
-			// 菜谱写操作
+			// 菜谱写操作（需登录）
 			auth.POST("/recipes", recipeH.Create)            // 创建菜谱
 			auth.PUT("/recipes/:id", recipeH.Update)         // 更新菜谱
 			auth.DELETE("/recipes/:id", recipeH.Delete)      // 删除菜谱

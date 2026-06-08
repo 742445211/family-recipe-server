@@ -65,3 +65,41 @@ func TestOrderAddAndList(t *testing.T) {
 		t.Fatal("删除他人点菜应失败")
 	}
 }
+
+func TestOrderAddRejectsOtherFamilyRecipe(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
+
+	otherFamily := model.Family{Name: "其他家", InviteCode: "OTHER1"}
+	db.Create(&otherFamily)
+	otherRecipe := model.Recipe{Name: "外来私有菜", CreatorID: userID, FamilyID: otherFamily.ID, IsPublic: false}
+	if err := NewRecipeService(db).Create(&otherRecipe); err != nil {
+		t.Fatalf("seed recipe: %v", err)
+	}
+
+	svc := NewOrderService(db)
+	if _, err := svc.Add(familyID, otherRecipe.ID, "dinner", userID, "2026-05-01", "", 1); err == nil {
+		t.Fatal("不应允许用其他家庭的私有菜谱点菜")
+	}
+}
+
+func TestOrderAddAllowsPublicRecipeFromOtherFamily(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
+
+	otherFamily := model.Family{Name: "其他家", InviteCode: "OTHER2"}
+	db.Create(&otherFamily)
+	pub := model.Recipe{Name: "外来公开菜", CreatorID: userID, FamilyID: otherFamily.ID, IsPublic: true}
+	if err := NewRecipeService(db).Create(&pub); err != nil {
+		t.Fatalf("seed recipe: %v", err)
+	}
+
+	svc := NewOrderService(db)
+	order, err := svc.Add(familyID, pub.ID, "dinner", userID, "2026-05-02", "", 1)
+	if err != nil {
+		t.Fatalf("应允许用公开菜谱点菜: %v", err)
+	}
+	if order.RecipeID != pub.ID {
+		t.Fatalf("recipe_id: got %d", order.RecipeID)
+	}
+}

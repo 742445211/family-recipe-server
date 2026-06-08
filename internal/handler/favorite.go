@@ -7,6 +7,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -45,9 +46,21 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 	// 从 URL 路径参数解析菜谱 ID
 	recipeID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	// 从 JWT 上下文中获取当前用户 ID
 	userID := middleware.GetUserID(c)
-
+	familyID := middleware.GetFamilyID(c)
+	if familyID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请先加入家庭"})
+		return
+	}
+	if err := h.db.Where("id = ? AND (family_id = ? OR is_public = ?)", recipeID, familyID, true).
+		First(&model.Recipe{}).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "菜谱不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "收藏失败"})
+		return
+	}
 	// 使用 FirstOrCreate 实现幂等收藏：
 	//   先按 user_id+recipe_id 查找，存在则返回已有记录，不存在则插入新记录
 	fav := model.Favorite{

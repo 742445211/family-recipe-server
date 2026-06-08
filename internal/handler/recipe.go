@@ -8,6 +8,10 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -51,16 +55,27 @@ func NewRecipeHandler(db *gorm.DB) *RecipeHandler {
 //   - 成功：{"code":0, "msg":"ok", "data":{"id":1,"name":"...","family_id":1,...}}
 //   - 失败：{"code":400, "msg":"参数错误"} / {"code":500, "msg":"创建失败: ..."}
 func (h *RecipeHandler) Create(c *gin.Context) {
-	// 1. 解析请求体到 Recipe 结构体
-	var r model.Recipe
-	if err := c.ShouldBindJSON(&r); err != nil {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "参数错误"})
 		return
+	}
+	var r model.Recipe
+	if err := json.Unmarshal(body, &r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "参数错误"})
+		return
+	}
+	if !bytes.Contains(body, []byte(`"is_public"`)) {
+		r.IsPublic = true
 	}
 
 	// 2. 服务端注入创建者 ID 和家庭 ID（不信任客户端传入）
 	r.CreatorID = middleware.GetUserID(c)
 	r.FamilyID = middleware.GetFamilyID(c)
+	if r.FamilyID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请先加入家庭"})
+		return
+	}
 
 	// 3. 调用 service 层创建菜谱
 	if err := h.svc.Create(&r); err != nil {
@@ -100,7 +115,16 @@ func (h *RecipeHandler) Update(c *gin.Context) {
 
 	// 以路径参数 ID 为准，覆盖请求体中的 ID（防止客户端篡改）
 	r.ID = id
-	if err := h.svc.Update(&r); err != nil {
+	familyID := middleware.GetFamilyID(c)
+	if familyID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请先加入家庭"})
+		return
+	}
+	if err := h.svc.Update(&r, familyID); err != nil {
+		if errors.Is(err, service.ErrRecipeNotInFamily) {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "菜谱不存在"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "更新失败"})
 		return
 	}
@@ -124,8 +148,17 @@ func (h *RecipeHandler) Delete(c *gin.Context) {
 	// 从 URL 路径参数解析菜谱 ID
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	// 调用 service 层删除（校验是否为创建者本人）
-	if err := h.svc.Delete(id, middleware.GetUserID(c)); err != nil {
+	familyID := middleware.GetFamilyID(c)
+	if familyID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请先加入家庭"})
+		return
+	}
+	// 调用 service 层删除（校验是否为创建者本人且属于当前家庭）
+	if err := h.svc.Delete(id, middleware.GetUserID(c), familyID); err != nil {
+		if errors.Is(err, service.ErrRecipeNotInFamily) {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "菜谱不存在"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "删除失败"})
 		return
 	}
@@ -134,7 +167,7 @@ func (h *RecipeHandler) Delete(c *gin.Context) {
 
 // Get 获取菜谱详情接口。
 //
-// 路由：GET /api/recipes/:id（公开接口）
+// 路由：GET /api/recipes/:id（可选登录；本家庭或 is_public=1 可见）
 //
 // 功能：
 //   根据菜谱 ID 查询菜谱详细信息。
@@ -149,8 +182,7 @@ func (h *RecipeHandler) Get(c *gin.Context) {
 	// 从 URL 路径参数解析菜谱 ID
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	// 调用 service 层获取菜谱详情
-	r, err := h.svc.GetByID(id)
+	r, err := h.svc.GetByID(id, middleware.GetFamilyID(c))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "菜谱不存在"})
 		return
@@ -160,7 +192,7 @@ func (h *RecipeHandler) Get(c *gin.Context) {
 
 // List 获取菜谱列表接口（分页，支持搜索和分类筛选）。
 //
-// 路由：GET /api/recipes（公开接口）
+// 路由：GET /api/recipes（可选登录；本家庭全部 + 其他家庭公开菜谱）
 //
 // 功能：
 //   分页查询菜谱列表，支持关键字搜索和分类筛选。
@@ -175,19 +207,13 @@ func (h *RecipeHandler) Get(c *gin.Context) {
 //   - 成功：{"code":0, "data":{"list":[...],"total":100,"page":1,"page_size":20}}
 //   - 失败：{"code":500, "msg":"查询失败"}
 func (h *RecipeHandler) List(c *gin.Context) {
-	// 从 Gin 上下文中获取 family_id（由之前的中间件或手动设置）
-	familyID := uint64(0)
-	if fid, exists := c.Get("family_id"); exists {
-		familyID = fid.(uint64)
-	}
-
 	// 解析分页参数（带默认值）
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
 	// 调用 service 层分页查询（含关键字和分类筛选）
 	recipes, total, err := h.svc.List(
-		familyID,
+		middleware.GetFamilyID(c),
 		c.Query("keyword"),
 		c.Query("category"),
 		page, pageSize,
@@ -226,8 +252,16 @@ func (h *RecipeHandler) Cooked(c *gin.Context) {
 	// 从 URL 路径参数解析菜谱 ID
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	// 调用 service 层增加烹饪次数
-	if err := h.svc.IncrementCookCount(id); err != nil {
+	familyID := middleware.GetFamilyID(c)
+	if familyID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请先加入家庭"})
+		return
+	}
+	if err := h.svc.IncrementCookCount(id, familyID); err != nil {
+		if errors.Is(err, service.ErrRecipeNotInFamily) {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "菜谱不存在"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "操作失败"})
 		return
 	}

@@ -84,6 +84,12 @@ func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID ui
 		quantity = 1
 	}
 
+	var recipe model.Recipe
+	if err := s.db.Where("id = ? AND (family_id = ? OR is_public = ?)", recipeID, familyID, true).
+		First(&recipe).Error; err != nil {
+		return nil, ErrRecipeNotInFamily
+	}
+
 	// 去重校验：同日期 + 同餐次 + 同菜谱不允许重复点菜
 	// GORM 软删除模型下的 Count 自动滤除 deleted_at IS NOT NULL 的记录
 	var count int64

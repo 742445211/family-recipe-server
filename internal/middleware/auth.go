@@ -13,18 +13,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetUserID 从 Gin context 中获取当前登录用户 ID。
-// 需在 AuthRequired 中间件之后调用，否则可能为 0。
+// GetUserID 从 Gin context 中获取当前登录用户 ID；未登录时返回 0。
 func GetUserID(c *gin.Context) uint64 {
-	id, _ := c.Get("user_id")
-	return id.(uint64)
+	id, ok := c.Get("user_id")
+	if !ok {
+		return 0
+	}
+	v, _ := id.(uint64)
+	return v
 }
 
-// GetFamilyID 从 Gin context 中获取当前用户所属家庭 ID。
-// 需在 AuthRequired 中间件之后调用，未加入家庭时返回 0。
+// GetFamilyID 从 Gin context 中获取当前用户所属家庭 ID；未登录或未加入家庭时返回 0。
 func GetFamilyID(c *gin.Context) uint64 {
-	id, _ := c.Get("family_id")
-	return id.(uint64)
+	id, ok := c.Get("family_id")
+	if !ok {
+		return 0
+	}
+	v, _ := id.(uint64)
+	return v
 }
 
 // AuthRequired 返回 JWT 认证中间件。
@@ -58,6 +64,31 @@ func AuthRequired() gin.HandlerFunc {
 		}
 
 		// 4. 将用户信息注入上下文，供后续 handler 使用
+		c.Set("user_id", claims.UserID)
+		c.Set("openid", claims.OpenID)
+		c.Set("family_id", claims.FamilyID)
+		c.Next()
+	}
+}
+
+// OptionalAuth 可选 JWT 认证：有合法 Bearer token 时注入用户信息，否则继续处理。
+func OptionalAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		auth := c.GetHeader("Authorization")
+		if auth == "" {
+			c.Next()
+			return
+		}
+		parts := strings.SplitN(auth, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.Next()
+			return
+		}
+		claims, err := jwt.Parse(config.AppConfig.JWT.Secret, parts[1])
+		if err != nil {
+			c.Next()
+			return
+		}
 		c.Set("user_id", claims.UserID)
 		c.Set("openid", claims.OpenID)
 		c.Set("family_id", claims.FamilyID)

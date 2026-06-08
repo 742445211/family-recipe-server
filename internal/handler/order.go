@@ -8,6 +8,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -98,9 +99,12 @@ func (h *OrderHandler) Add(c *gin.Context) {
 		req.Date, req.Note, req.Quantity,
 	)
 	if err != nil {
-		// 区分业务错误（如重复点菜）和系统错误
 		if err.Error() == "该餐次已点过这道菜" {
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+			return
+		}
+		if errors.Is(err, service.ErrRecipeNotInFamily) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "菜谱不存在或不属于当前家庭"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "点菜失败"})

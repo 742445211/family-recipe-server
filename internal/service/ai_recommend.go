@@ -27,6 +27,7 @@ var (
 type AIRecommendItemInput struct {
 	Name        string `json:"name"`
 	Category    string `json:"category"`
+	MealType    string `json:"meal_type"`
 	Difficulty  string `json:"difficulty"`
 	CookTime    int    `json:"cook_time"`
 	Ingredients string `json:"ingredients"`
@@ -47,6 +48,7 @@ type AIRecipeDraft struct {
 	FamilyID          uint64  `json:"family_id"`
 	Name              string  `json:"name"`
 	Category          string  `json:"category"`
+	MealType          string  `json:"meal_type"`
 	Difficulty        string  `json:"difficulty"`
 	CookTime          int     `json:"cook_time"`
 	Ingredients       string  `json:"ingredients"`
@@ -61,6 +63,7 @@ type AIRecipeDraft struct {
 type AIRecommendItemSummary struct {
 	ItemID           string  `json:"item_id"`
 	Name             string  `json:"name"`
+	MealType         string  `json:"meal_type"`
 	Reason           string  `json:"reason"`
 	ExistingRecipeID *uint64 `json:"existing_recipe_id,omitempty"`
 }
@@ -127,7 +130,8 @@ func (s *AIRecommendService) recommendCount() int {
 }
 
 // Recommend 生成推荐并写入 Redis。
-func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uint64) (*AIRecommendResult, error) {
+// mealType 为可选餐次覆盖（breakfast/lunch/dinner/supper 或中文），为空时按当前时间自动判断。
+func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uint64, mealType string) (*AIRecommendResult, error) {
 	if s.rateLimit != nil {
 		st, err := s.rateLimit.Peek(ctx, userID)
 		if err != nil {
@@ -142,6 +146,10 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 	actx, err := s.ctxSvc.Build(familyID)
 	if err != nil {
 		return nil, err
+	}
+	// 调用方指定餐次时覆盖自动判断结果
+	if ms, ok := NormalizeMealSlot(mealType); ok {
+		actx.Meal = ms
 	}
 
 	nameToID := s.familyRecipeNameMap(familyID)
@@ -175,6 +183,7 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 			FamilyID:         familyID,
 			Name:             strings.TrimSpace(in.Name),
 			Category:         defaultStr(in.Category, "其他"),
+			MealType:         normalizeMealType(in.MealType, actx.Meal.Type),
 			Difficulty:       normalizeDifficulty(in.Difficulty),
 			CookTime:         in.CookTime,
 			Ingredients:      defaultJSONArr(in.Ingredients),
@@ -188,7 +197,7 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 			return nil, err
 		}
 		summaries = append(summaries, AIRecommendItemSummary{
-			ItemID: itemID, Name: draft.Name, Reason: draft.Reason, ExistingRecipeID: existingID,
+			ItemID: itemID, Name: draft.Name, MealType: draft.MealType, Reason: draft.Reason, ExistingRecipeID: existingID,
 		})
 	}
 
@@ -367,6 +376,7 @@ func filterNewDishesOnly(inputs []AIRecommendItemInput, existing map[string]uint
 type flexibleAIRecommendItem struct {
 	Name        string          `json:"name"`
 	Category    string          `json:"category"`
+	MealType    string          `json:"meal_type"`
 	Difficulty  string          `json:"difficulty"`
 	CookTime    int             `json:"cook_time"`
 	Ingredients json.RawMessage `json:"ingredients"`
@@ -398,6 +408,7 @@ func parseAIRecommendJSON(raw string) ([]AIRecommendItemInput, error) {
 		out = append(out, AIRecommendItemInput{
 			Name:        name,
 			Category:    it.Category,
+			MealType:    it.MealType,
 			Difficulty:  it.Difficulty,
 			CookTime:    it.CookTime,
 			Ingredients: normalizeJSONArrayField(it.Ingredients),
@@ -466,6 +477,14 @@ func defaultStr(s, def string) string {
 		return def
 	}
 	return strings.TrimSpace(s)
+}
+
+// normalizeMealType 将 LLM 给出的餐次归一化为标准英文标识，识别失败时回落到推荐上下文的餐次。
+func normalizeMealType(raw, fallback string) string {
+	if ms, ok := NormalizeMealSlot(raw); ok {
+		return ms.Type
+	}
+	return fallback
 }
 
 func normalizeDifficulty(d string) string {

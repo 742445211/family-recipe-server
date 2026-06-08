@@ -33,14 +33,74 @@ func TestFormatContextBlock(t *testing.T) {
 		RecipeNames:  []string{"番茄炒蛋"},
 		OrderHistory: []string{"红烧肉"},
 		WeatherLine:  "成都 28°C 晴",
+		Meal:         MealSlot{Type: "dinner", Name: "晚餐"},
 	})
-	for _, want := range []string{"番茄炒蛋", "红烧肉", "成都 28°C 晴", "禁止推荐"} {
+	for _, want := range []string{"番茄炒蛋", "红烧肉", "成都 28°C 晴", "禁止推荐", "晚餐"} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("block 应包含 %q: %s", want, block)
 		}
 	}
 	if !strings.Contains(FormatContextBlock(&AIRecommendContext{}), "可自由推荐新菜") {
 		t.Fatal("无已有菜谱时应提示可自由推荐")
+	}
+}
+
+func TestInferMealSlot(t *testing.T) {
+	cases := []struct {
+		hour     int
+		wantType string
+		wantName string
+	}{
+		{7, "breakfast", "早餐"},
+		{12, "lunch", "午餐"},
+		{18, "dinner", "晚餐"},
+		{23, "supper", "宵夜"},
+		{2, "supper", "宵夜"},
+	}
+	for _, c := range cases {
+		ms := InferMealSlot(time.Date(2026, 6, 8, c.hour, 0, 0, 0, time.Local))
+		if ms.Type != c.wantType || ms.Name != c.wantName {
+			t.Fatalf("hour=%d got %+v want %s/%s", c.hour, ms, c.wantType, c.wantName)
+		}
+	}
+}
+
+func TestNormalizeMealSlot(t *testing.T) {
+	cases := map[string]string{
+		"breakfast": "breakfast",
+		"早餐":        "breakfast",
+		"lunch":     "lunch",
+		"午餐":        "lunch",
+		"dinner":    "dinner",
+		"晚餐":        "dinner",
+		"supper":    "supper",
+		"宵夜":        "supper",
+		"夜宵":        "supper",
+	}
+	for in, want := range cases {
+		ms, ok := NormalizeMealSlot(in)
+		if !ok || ms.Type != want {
+			t.Fatalf("NormalizeMealSlot(%q)=%+v ok=%v want %s", in, ms, ok, want)
+		}
+	}
+	if _, ok := NormalizeMealSlot("乱填"); ok {
+		t.Fatal("无法识别的餐次应返回 ok=false")
+	}
+	if _, ok := NormalizeMealSlot(""); ok {
+		t.Fatal("空餐次应返回 ok=false")
+	}
+}
+
+func TestAIContextServiceBuildSetsMealSlot(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	_, familyID := testutil.SeedUserAndFamily(t, db)
+	svc := NewAIContextService(db, nil)
+	ctx, err := svc.Build(familyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Meal.Type == "" || ctx.Meal.Name == "" {
+		t.Fatalf("Build 应根据当前时间推断餐次: %+v", ctx.Meal)
 	}
 }
 

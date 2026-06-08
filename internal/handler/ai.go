@@ -26,8 +26,9 @@ func NewAIHandler(recommend *service.AIRecommendService, weather *service.Weathe
 func (h *AIHandler) Recommend(c *gin.Context) {
 	familyID := middleware.GetFamilyID(c)
 	userID := middleware.GetUserID(c)
+	mealType := c.Query("meal_type")
 
-	result, err := h.recommend.Recommend(c.Request.Context(), familyID, userID)
+	result, err := h.recommend.Recommend(c.Request.Context(), familyID, userID, mealType)
 	if errors.Is(err, service.ErrRateLimitExceeded) {
 		c.JSON(http.StatusTooManyRequests, gin.H{
 			"code": 429,

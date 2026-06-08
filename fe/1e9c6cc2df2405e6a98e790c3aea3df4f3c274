@@ -1,0 +1,32 @@
+internal/handler/category.go
+  s_a81105b91fb95e::t_933a2caa95e1b0 40-49
+internal/handler/category_test.go
+  s_a81105b91fb95e::t_e8ec2cfc852c00 1-9,11-22,33-66
+  s_a81105b91fb95e::t_88c686f5e7b4da 10
+  s_a81105b91fb95e::t_a9d7edbb5a4ef7 23-32
+main.go
+  s_a81105b91fb95e::t_c890990278da55 99-101
+internal/service/category.go
+  s_a81105b91fb95e::t_f803d5ba8f4a53 4
+  s_a81105b91fb95e::t_3c30a6d115e114 88-110
+internal/service/category_test.go
+  s_a81105b91fb95e::t_ca80b95a0d137e 71,73-76
+  s_a81105b91fb95e::t_2ddc3ea27b09dc 87
+  s_a81105b91fb95e::t_ff5d171a6284b1 64-70,72,77-86,88-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "fe1e9c6cc2df2405e6a98e790c3aea3df4f3c274",
+  "prompts": {},
+  "sessions": {
+    "s_a81105b91fb95e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "516cca10-8d3e-4e52-a07f-2845ebcb5590",
+        "model": "default"
+      },
+      "human_author": "张津川 <jinchuan@uxin.com>"
+    }
+  }
+}

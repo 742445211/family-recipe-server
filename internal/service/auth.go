@@ -17,6 +17,9 @@ import (
 	"recipe-server/config"
 )
 
+// wechatAPIBase 微信登录 API 根地址（测试可替换为 httptest 地址）。
+var wechatAPIBase = "https://api.weixin.qq.com"
+
 // WeChatSession 微信登录凭证校验接口返回的会话信息。
 // 对应微信 API jscode2session 的响应结构。
 // 文档参考：https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/user-login/code2Session.html
@@ -26,6 +29,16 @@ type WeChatSession struct {
 	UnionID    string `json:"unionid"`     // 用户在开放平台的唯一标识（需绑定开放平台才有）
 	ErrCode    int    `json:"errcode"`     // 错误码，0 表示成功
 	ErrMsg     string `json:"errmsg"`      // 错误信息
+}
+
+// SetWechatAPIBaseForTest 测试专用：替换微信登录 API 基址。
+func SetWechatAPIBaseForTest(base string) {
+	wechatAPIBase = base
+}
+
+// WechatAPIBaseForTest 测试专用：读取当前微信登录 API 基址。
+func WechatAPIBaseForTest() string {
+	return wechatAPIBase
 }
 
 // Code2Session 用小程序端获取的临时登录凭证 code 换取微信会话信息。
@@ -47,7 +60,8 @@ type WeChatSession struct {
 func Code2Session(code string) (*WeChatSession, error) {
 	// 拼接微信 jscode2session 请求 URL（appid 和 secret 来自配置文件）
 	url := fmt.Sprintf(
-		"https://api.weixin.qq.com/sns/jscode2session?appid=%s&secret=%s&js_code=%s&grant_type=authorization_code",
+		"%s/sns/jscode2session?appid=%s&secret=%s&js_code=%s&grant_type=authorization_code",
+		wechatAPIBase,
 		config.AppConfig.WeChat.AppID,
 		config.AppConfig.WeChat.Secret,
 		code,

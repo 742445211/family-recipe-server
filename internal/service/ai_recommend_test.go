@@ -11,6 +11,7 @@ import (
 	"recipe-server/config"
 	"recipe-server/internal/cache"
 	"recipe-server/internal/model"
+	"recipe-server/internal/testutil"
 
 	"github.com/alicebob/miniredis/v2"
 )
@@ -63,8 +64,8 @@ func TestParseAIRecommendJSONStripsMarkdown(t *testing.T) {
 }
 
 func TestAIRecommendServiceRecommend(t *testing.T) {
-	db := setupTestDB(t)
-	uid, fid := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
 	mr, _ := miniredis.Run()
 	t.Cleanup(mr.Close)
 
@@ -133,8 +134,8 @@ func TestFilterNewDishesOnly(t *testing.T) {
 }
 
 func TestAIRecommendFiltersExistingRecipes(t *testing.T) {
-	db := setupTestDB(t)
-	uid, fid := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
 	existing := &model.Recipe{Name: "红烧肉", FamilyID: fid, CreatorID: uid, Ingredients: `[]`, Steps: `[]`}
 	db.Create(existing)
 
@@ -172,8 +173,8 @@ func strconvQuote(s string) string {
 }
 
 func TestImportAIRecipeFromCache(t *testing.T) {
-	db := setupTestDB(t)
-	uid, fid := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
 	mr, _ := miniredis.Run()
 	t.Cleanup(mr.Close)
 	store := cache.NewRedisCache(mr.Addr(), "", 0)
@@ -196,8 +197,8 @@ func TestImportAIRecipeFromCache(t *testing.T) {
 }
 
 func TestAddOrderFromAIItem(t *testing.T) {
-	db := setupTestDB(t)
-	uid, fid := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
 	mr, _ := miniredis.Run()
 	t.Cleanup(mr.Close)
 	store := cache.NewRedisCache(mr.Addr(), "", 0)

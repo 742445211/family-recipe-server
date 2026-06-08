@@ -31,10 +31,13 @@ func NewMiniProgramToken() *MiniProgramToken {
 
 var sharedMiniProgram = NewMiniProgramToken()
 
-// SharedMiniProgramToken 进程内唯一小程序 token 缓存（避免多处各自刷新导致 40001）。
+// sharedMiniProgram 进程内唯一小程序 token 缓存（避免多处各自刷新导致 40001）。
 func SharedMiniProgramToken() Provider {
 	return sharedMiniProgram
 }
+
+// wechatTokenAPIBase 小程序 token API 根地址（测试可替换）。
+var wechatTokenAPIBase = "https://api.weixin.qq.com"
 
 // InvalidateSharedMiniProgramToken 清除共享 token，供 40001 后强制刷新。
 func InvalidateSharedMiniProgramToken() {
@@ -54,8 +57,8 @@ func (m *MiniProgramToken) GetAccessToken() (string, error) {
 	if m.token != "" && time.Now().Before(m.expires) {
 		return m.token, nil
 	}
-	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s",
-		config.AppConfig.WeChat.AppID, config.AppConfig.WeChat.Secret)
+	url := fmt.Sprintf("%s/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s",
+		wechatTokenAPIBase, config.AppConfig.WeChat.AppID, config.AppConfig.WeChat.Secret)
 	resp, err := m.client.Get(url)
 	if err != nil {
 		return "", err

@@ -4,14 +4,15 @@ import (
 	"testing"
 
 	"recipe-server/internal/model"
+	"recipe-server/internal/testutil"
 )
 
 func TestPendingWebSocketNotificationsExcludesSent(t *testing.T) {
-	initTestConfig()
-	requireNotificationEnabled(t)
+	testutil.InitTestConfig()
+	testutil.RequireNotificationEnabled(t)
 
-	db := setupTestDB(t)
-	orderID, chefID := seedChefOrder(t, db)
+	db := testutil.SetupTestDB(t)
+	orderID, chefID := testutil.SeedChefOrder(t, db)
 
 	svc := NewNotificationService(db, NewWebSocketHub())
 	_ = svc.NotifyOrderCreated(orderID)
@@ -36,10 +37,10 @@ func TestPendingWebSocketNotificationsExcludesSent(t *testing.T) {
 }
 
 func TestMarkWebSocketDeliverySentUpdatesSkipped(t *testing.T) {
-	initTestConfig()
+	testutil.InitTestConfig()
 
-	db := setupTestDB(t)
-	orderID, _ := seedChefOrder(t, db)
+	db := testutil.SetupTestDB(t)
+	orderID, _ := testutil.SeedChefOrder(t, db)
 
 	n := model.Notification{
 		FamilyID: 1, ReceiverUserID: 2, OrderID: orderID,

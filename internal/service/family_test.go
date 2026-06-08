@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	"recipe-server/internal/model"
+	"recipe-server/internal/testutil"
 )
 
 func TestFamilyCreateAndJoin(t *testing.T) {
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 
 	// 创建两个用户
 	u1 := model.User{OpenID: "user-1", Nickname: "用户1"}

@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	"recipe-server/internal/model"
+	"recipe-server/internal/testutil"
 )
 
 func TestOrderAddAndList(t *testing.T) {
-	db := setupTestDB(t)
-	userID, familyID := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
 
 	recipe := model.Recipe{
 		Name: "麻婆豆腐", Category: "荤菜", Difficulty: "medium",

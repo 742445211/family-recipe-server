@@ -74,20 +74,45 @@ pkg/jwt/                       # JWT 签发与解析
 - `GET /api/weather` — Open-Meteo，默认成都，缓存 3h
 - 配置：`redis`、`weather`、`ai.rate_limit` 见 `config.yaml.example`
 
-## 测试（TDD）
+## 测试（严格 TDD，强制）
 
-- 通知、AI 相关改动：**先写失败测试，再实现**
-- 单元测试：`internal/service/*_test.go`、`internal/service/notifier/*_test.go`
-- 测试 DB：`setupTestDB()` 使用内存 SQLite（需 CGO）；Windows 无 CGO 时集成测试可能失败，在 Linux 服务器执行 `go test ./...`
-- 纯 notifier 测试不依赖 DB，应始终可通过
+**所有新功能、行为变更与 Bug 修复必须严格遵循 TDD**：先写（或补）失败测试 → 再写实现 → 再跑通测试。禁止先写实现后补测试应付检查。
+
+### 必须遵守
+
+1. **Red**：新增/修改行为前，先添加能表达预期行为的失败测试（或先跑现有测试确认失败）。
+2. **Green**：以最小实现让测试通过。
+3. **Refactor**：在测试保护下整理代码，改后必须再次 `go test` 全绿。
+4. **覆盖范围**：`service`、`handler`、`middleware`、`config`、`pkg/*`、`notifier`、`wechattoken` 等包中新增/变更的导出逻辑或分支，必须有对应单元测试；纯 HTTP 转发且无分支的 handler 也至少覆盖参数校验与鉴权路径。
+5. **测试复用**：内存 DB 与种子数据统一使用 `internal/testutil`（`SetupTestDB`、`SeedUserAndFamily`、`EnsureAppConfig` 等），避免各包重复造轮子。
+6. **外部依赖**：微信/AI/天气/OSS 等 HTTP 调用在测试中必须用 `httptest` 或注入 mock client，禁止依赖生产密钥或真实外网（OSS 集成测试无配置时 `t.Skip`）。
+
+### 测试位置
+
+| 包 | 测试文件 |
+| --- | --- |
+| 业务逻辑 | `internal/service/*_test.go` |
+| HTTP 处理器 | `internal/handler/*_test.go` |
+| 中间件 | `internal/middleware/*_test.go` |
+| 配置 | `config/*_test.go` |
+| 工具库 | `pkg/**/*_test.go` |
+| 通知通道 | `internal/service/notifier/*_test.go` |
+| 微信 token | `internal/service/wechattoken/*_test.go` |
+| 测试辅助 | `internal/testutil/`（非 `*_test.go`，仅供测试包 import） |
+
+### 运行命令
 
 ```bash
 go mod tidy
-go build .
-go test ./internal/service/notifier/... ./pkg/jwt/... -count=1
-# Linux 全量：
-go test ./... -count=1
+GOTOOLCHAIN=go1.24.0 CGO_ENABLED=1 go build .
+# 快速（无 CGO 依赖的包）：
+GOTOOLCHAIN=go1.24.0 go test ./internal/service/notifier/... ./pkg/... ./config/... ./internal/middleware/... -count=1
+# Linux 全量（含 SQLite 内存库集成测试，需 CGO）：
+GOTOOLCHAIN=go1.24.0 CGO_ENABLED=1 go test ./... -count=1
 ```
+
+- 测试 DB：`testutil.SetupTestDB()` 使用内存 SQLite（需 CGO）；Windows 无 CGO 时集成测试可能失败，在 Linux CI/服务器执行全量测试。
+- 纯 notifier / config / jwt 测试不依赖 DB，应始终可通过。
 
 ## 编码规范
 

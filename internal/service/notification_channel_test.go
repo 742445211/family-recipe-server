@@ -5,10 +5,11 @@ import (
 
 	"recipe-server/config"
 	"recipe-server/internal/model"
+	"recipe-server/internal/testutil"
 )
 
 func TestGetEnabledTargetsSkipsUnconfiguredChannels(t *testing.T) {
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	config.AppConfig = &config.Config{
 		Notification: config.NotificationConfig{
 			WeChatSubscribe: config.NotificationWxSub{Enabled: true, TemplateID: "tmpl"},
@@ -37,7 +38,7 @@ func TestGetEnabledTargetsSkipsUnconfiguredChannels(t *testing.T) {
 }
 
 func TestGetEnabledTargetsSkipsWeChatWhenGlobalMissing(t *testing.T) {
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	config.AppConfig = &config.Config{
 		Notification: config.NotificationConfig{
 			WeChatSubscribe: config.NotificationWxSub{Enabled: true, TemplateID: "tmpl"},

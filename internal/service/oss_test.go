@@ -10,17 +10,17 @@ import (
 	"time"
 
 	"recipe-server/config"
+	"recipe-server/internal/testutil"
 )
 
-func init() {
-	// 加载配置
-	if err := config.Load("../../config.yaml"); err != nil {
-		panic("加载配置失败: " + err.Error())
-	}
+func ensureOSSTestConfig(t *testing.T) {
+	t.Helper()
+	testutil.EnsureAppConfig()
 }
 
 // TestOSSConnect 测试 OSS 连接和上传
 func TestOSSConnect(t *testing.T) {
+	ensureOSSTestConfig(t)
 	cfg := config.AppConfig.OSS
 	if cfg.Endpoint == "" || cfg.Bucket == "" {
 		t.Skip("OSS 未配置，跳过测试")
@@ -40,6 +40,7 @@ func TestOSSConnect(t *testing.T) {
 
 // TestSaveImageOSS 测试完整上传流程
 func TestSaveImageOSS(t *testing.T) {
+	ensureOSSTestConfig(t)
 	if config.AppConfig.OSS.Endpoint == "" {
 		t.Skip("OSS 未配置")
 	}

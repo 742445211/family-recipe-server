@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"recipe-server/internal/model"
+	"recipe-server/internal/testutil"
 )
 
 func TestGetRecentOrderNames(t *testing.T) {
-	db := setupTestDB(t)
-	uid, fid := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
 	os := NewOrderService(db)
 
 	today := time.Now().Format("2006-01-02")
@@ -39,8 +40,8 @@ func TestGetRecentOrderNames(t *testing.T) {
 }
 
 func TestGetRecentOrderNamesRespectsLimit(t *testing.T) {
-	db := setupTestDB(t)
-	uid, fid := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	uid, fid := testutil.SeedUserAndFamily(t, db)
 	os := NewOrderService(db)
 	today := time.Now().Format("2006-01-02")
 

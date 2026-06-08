@@ -1,113 +1,15 @@
 package service
 
 import (
-	"fmt"
-	"strings"
 	"testing"
 
-	"recipe-server/config"
 	"recipe-server/internal/model"
-
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
+	"recipe-server/internal/testutil"
 )
 
-// setupTestDB 创建内存 SQLite 用于测试
-func setupTestDB(t *testing.T) *gorm.DB {
-	// 每用例独立内存库；cache=shared + MaxOpenConns(1) 供异步通知 goroutine 复用连接
-	safeName := strings.ReplaceAll(t.Name(), "/", "_")
-	dsn := fmt.Sprintf("file:memdb_%s?mode=memory&cache=shared", safeName)
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("连接测试数据库失败: %v", err)
-	}
-	if sqlDB, err := db.DB(); err == nil {
-		sqlDB.SetMaxOpenConns(1)
-	}
-	db.AutoMigrate(
-		&model.Family{},
-		&model.User{},
-		&model.FamilyMember{},
-		&model.Recipe{},
-		&model.DailyOrder{},
-		&model.Favorite{},
-		&model.Notification{},
-		&model.NotificationDelivery{},
-		&model.NotificationChannel{},
-	)
-	return db
-}
-
-func ensureAppConfig() {
-	if config.AppConfig == nil {
-		_ = config.Load("../../config.yaml")
-	}
-	if config.AppConfig == nil {
-		config.AppConfig = &config.Config{}
-	}
-	if config.AppConfig.JWT.Secret == "" {
-		config.AppConfig.JWT = config.JWTConfig{Secret: "test-secret", ExpireHours: 24}
-	}
-}
-
-// initTestConfig 测试默认开启通知（不依赖生产 config.yaml 是否含 notification 段）。
-func initTestConfig() {
-	initTestConfigNotification(true)
-}
-
-// initTestConfigNotification 按指定开关初始化通知测试配置。
-func initTestConfigNotification(enabled bool) {
-	ensureAppConfig()
-	applyTestNotificationConfig(enabled)
-}
-
-func applyTestNotificationConfig(enabled bool) {
-	n := &config.AppConfig.Notification
-	n.Enabled = enabled
-	n.Worker.Enabled = false
-	if !enabled {
-		return
-	}
-	if !n.WebSocket.Enabled {
-		n.WebSocket.Enabled = true
-	}
-	if n.WeChatSubscribe.TemplateID == "" {
-		n.WeChatSubscribe.Enabled = true
-		n.WeChatSubscribe.TemplateID = "test-template"
-	}
-	if config.AppConfig.WeChat.AppID == "" {
-		config.AppConfig.WeChat.AppID = "test"
-	}
-	if config.AppConfig.WeChat.Secret == "" {
-		config.AppConfig.WeChat.Secret = "test"
-	}
-}
-
-func requireNotificationEnabled(t *testing.T) {
-	t.Helper()
-	if config.AppConfig == nil || !config.AppConfig.Notification.Enabled {
-		t.Skip("notification.enabled=false，跳过需通知开启的用例")
-	}
-}
-
-func seedUserAndFamily(t *testing.T, db *gorm.DB) (uint64, uint64) {
-	user := model.User{OpenID: "test-openid", Nickname: "测试用户"}
-	if err := db.Create(&user).Error; err != nil {
-		t.Fatalf("创建测试用户失败: %v", err)
-	}
-	family := model.Family{Name: "测试家庭", InviteCode: "TEST01"}
-	if err := db.Create(&family).Error; err != nil {
-		t.Fatalf("创建测试家庭失败: %v", err)
-	}
-	member := model.FamilyMember{FamilyID: family.ID, UserID: user.ID, Role: "owner"}
-	db.Create(&member)
-	db.Model(&user).Update("current_family_id", family.ID)
-	return user.ID, family.ID
-}
-
 func TestRecipeCRUD(t *testing.T) {
-	db := setupTestDB(t)
-	_, familyID := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	_, familyID := testutil.SeedUserAndFamily(t, db)
 	svc := NewRecipeService(db)
 
 	// Create

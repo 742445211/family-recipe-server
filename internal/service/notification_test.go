@@ -2,48 +2,17 @@ package service
 
 import (
 	"testing"
-	"time"
 
 	"recipe-server/internal/model"
-
-	"gorm.io/gorm"
+	"recipe-server/internal/testutil"
 )
 
-func seedChefOrder(t *testing.T, db *gorm.DB) (orderID uint64, chefID uint64) {
-	t.Helper()
-
-	adder := model.User{OpenID: "adder-oid", Nickname: "点菜人"}
-	chef := model.User{OpenID: "chef-oid", Nickname: "厨师"}
-	db.Create(&adder)
-	db.Create(&chef)
-
-	family := model.Family{Name: "测试家", InviteCode: "CHEF01"}
-	db.Create(&family)
-	db.Create(&model.FamilyMember{FamilyID: family.ID, UserID: adder.ID, Role: "member"})
-	db.Create(&model.FamilyMember{FamilyID: family.ID, UserID: chef.ID, Role: "member", IsChef: true})
-
-	recipe := model.Recipe{Name: "红烧肉", Category: "荤菜", CreatorID: adder.ID, FamilyID: family.ID}
-	db.Create(&recipe)
-
-	order := model.DailyOrder{
-		FamilyID: family.ID, Date: "2026-06-05", MealType: "dinner",
-		RecipeID: recipe.ID, AddedBy: adder.ID, Quantity: 1,
-	}
-	db.Create(&order)
-	return order.ID, chef.ID
-}
-
-func waitNotificationAsync(t *testing.T) {
-	t.Helper()
-	time.Sleep(200 * time.Millisecond)
-}
-
 func TestNotifyOrderCreatedCreatesNotification(t *testing.T) {
-	initTestConfig()
-	requireNotificationEnabled(t)
+	testutil.InitTestConfig()
+	testutil.RequireNotificationEnabled(t)
 
-	db := setupTestDB(t)
-	orderID, chefID := seedChefOrder(t, db)
+	db := testutil.SetupTestDB(t)
+	orderID, chefID := testutil.SeedChefOrder(t, db)
 	hub := NewWebSocketHub()
 	svc := NewNotificationService(db, hub)
 
@@ -71,11 +40,11 @@ func TestNotifyOrderCreatedCreatesNotification(t *testing.T) {
 }
 
 func TestNotifyOrderCreatedIdempotent(t *testing.T) {
-	initTestConfig()
-	requireNotificationEnabled(t)
+	testutil.InitTestConfig()
+	testutil.RequireNotificationEnabled(t)
 
-	db := setupTestDB(t)
-	orderID, chefID := seedChefOrder(t, db)
+	db := testutil.SetupTestDB(t)
+	orderID, chefID := testutil.SeedChefOrder(t, db)
 	hub := NewWebSocketHub()
 	svc := NewNotificationService(db, hub)
 
@@ -91,10 +60,10 @@ func TestNotifyOrderCreatedIdempotent(t *testing.T) {
 }
 
 func TestNotifyOrderCreatedNoChef(t *testing.T) {
-	initTestConfig()
+	testutil.InitTestConfig()
 
-	db := setupTestDB(t)
-	userID, familyID := seedUserAndFamily(t, db)
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
 	recipe := model.Recipe{Name: "番茄炒蛋", CreatorID: userID, FamilyID: familyID}
 	db.Create(&recipe)
 	order := model.DailyOrder{FamilyID: familyID, Date: "2026-06-05", MealType: "lunch", RecipeID: recipe.ID, AddedBy: userID}
@@ -113,10 +82,10 @@ func TestNotifyOrderCreatedNoChef(t *testing.T) {
 }
 
 func TestNotifyOrderCreatedSkipsWhenDisabled(t *testing.T) {
-	initTestConfigNotification(false)
+	testutil.InitTestConfigNotification(false)
 
-	db := setupTestDB(t)
-	orderID, chefID := seedChefOrder(t, db)
+	db := testutil.SetupTestDB(t)
+	orderID, chefID := testutil.SeedChefOrder(t, db)
 	hub := NewWebSocketHub()
 	svc := NewNotificationService(db, hub)
 
@@ -132,11 +101,11 @@ func TestNotifyOrderCreatedSkipsWhenDisabled(t *testing.T) {
 }
 
 func TestListUnreadAndMarkRead(t *testing.T) {
-	initTestConfig()
-	requireNotificationEnabled(t)
+	testutil.InitTestConfig()
+	testutil.RequireNotificationEnabled(t)
 
-	db := setupTestDB(t)
-	orderID, chefID := seedChefOrder(t, db)
+	db := testutil.SetupTestDB(t)
+	orderID, chefID := testutil.SeedChefOrder(t, db)
 	hub := NewWebSocketHub()
 	svc := NewNotificationService(db, hub)
 	_ = svc.NotifyOrderCreated(orderID)

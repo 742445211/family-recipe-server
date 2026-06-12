@@ -93,9 +93,11 @@ type AIRecommendService struct {
 	recipes    *RecipeService
 	orders     *OrderService
 	categories *CategoryService
+	catalog    *CatalogRecipeService
 }
 
 func NewAIRecommendService(db *gorm.DB, store cache.Store, ai *AIService, ctxSvc *AIContextService, rateLimit *AIRateLimitService) *AIRecommendService {
+	catalog := NewCatalogRecipeService(db, ai, rateLimit)
 	return &AIRecommendService{
 		db:         db,
 		store:      store,
@@ -105,6 +107,7 @@ func NewAIRecommendService(db *gorm.DB, store cache.Store, ai *AIService, ctxSvc
 		recipes:    NewRecipeService(db),
 		orders:     NewOrderService(db),
 		categories: NewCategoryService(db),
+		catalog:    catalog,
 	}
 }
 
@@ -135,11 +138,11 @@ func (s *AIRecommendService) recommendCount() int {
 // mealType 为可选餐次覆盖（breakfast/lunch/dinner/supper 或中文），为空时按当前时间自动判断。
 func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uint64, mealType string) (*AIRecommendResult, error) {
 	if s.rateLimit != nil {
-		st, err := s.rateLimit.Peek(ctx, userID)
+		st, err := s.rateLimit.Peek(ctx, AIRateLimitScopeRecommend, userID)
 		if err != nil {
 			return nil, err
 		}
-		if s.rateLimit.cfg().Enabled && st.Remaining <= 0 {
+		if s.rateLimit.cfg(AIRateLimitScopeRecommend).Enabled && st.Remaining <= 0 {
 			st.RetryAfterSec = st.ResetAfterSec
 			return &AIRecommendResult{RateLimit: st}, ErrRateLimitExceeded
 		}
@@ -162,7 +165,7 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 
 	var rl *RateLimitStatus
 	if s.rateLimit != nil {
-		st, err := s.rateLimit.CheckAndConsume(ctx, userID)
+		st, err := s.rateLimit.CheckAndConsume(ctx, AIRateLimitScopeRecommend, userID)
 		if err != nil {
 			return &AIRecommendResult{RateLimit: st}, err
 		}
@@ -178,6 +181,11 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 		var existingID *uint64
 		if id, ok := nameToID[strings.TrimSpace(in.Name)]; ok {
 			existingID = &id
+		}
+		if s.catalog != nil {
+			if _, err := s.catalog.EnsureFromRecommendItem(in); err != nil {
+				return nil, err
+			}
 		}
 		category, err := s.categories.Ensure(familyID, defaultStr(in.Category, "其他"))
 		if err != nil {

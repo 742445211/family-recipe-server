@@ -30,6 +30,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&model.FamilyMember{},
 		&model.RecipeCategory{},
 		&model.Recipe{},
+		&model.CatalogRecipe{},
 		&model.DailyOrder{},
 		&model.Favorite{},
 		&model.Menu{},

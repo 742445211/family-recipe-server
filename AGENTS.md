@@ -69,12 +69,23 @@ pkg/jwt/                       # JWT 签发与解析
 ## AI 推荐（结构化 + Redis）
 
 - **功能开关**：`ai.recommend_enabled`（`config.yaml`）；`false` 时 `/api/ai/*` 返回 403，前端隐藏入口
-- **前端读取**：`GET /api/app/features` → `{ "ai_recommend": true/false }`（公开，无需登录）
-- `POST /api/ai/recommend` → `{ batch_id, items, rate_limit }`；每人 3h 最多 3 次（429）
+- **前端读取**：`GET /api/app/features` → `{ "ai_recommend", "catalog_recipe" }`（公开，无需登录）
+- `POST /api/ai/recommend` → `{ batch_id, items, rate_limit }`；**recommend** 限流：默认 2h / 5 次（429）
 - `GET /api/ai/items/:item_id` — 从 Redis 读草稿
 - `POST /api/ai/items/:item_id/import-recipe` / `add-order` — 从 Redis 入库/点菜
 - `GET /api/weather` — Open-Meteo，默认成都，缓存 3h（不受 AI 开关影响）
-- 配置：`redis`、`weather`、`ai.rate_limit`、`ai.recommend_enabled` 见 `config.yaml.example`
+
+## 全局菜谱库（catalog_recipes）
+
+- **功能开关**：`ai.catalog_enabled`（默认随 `recommend_enabled`）；`GET /api/app/features` → `catalog_recipe`
+- `POST /api/catalog-recipes/lookup` — 按菜名精确查库；无记录或 `new_variant=true` 时 DeepSeek 生成并入库；纯查库不消耗 **catalog** 配额
+- `GET /api/catalog-recipes/:id` — 单条做法详情（切换 variant）
+- `POST /api/catalog-recipes/:id/use` — 递增 `use_count`
+- 同一 `name_key` 可有多条 `variant_label`（多种做法）；AI 推荐批次也会写入此表
+- **catalog** 限流：默认 2h / 5 次，与 recommend 独立计数（`ai.rate_limit.recommend` / `ai.rate_limit.catalog`）
+- 添加页流程：lookup 预填表单 → 用户确认 → `POST /api/recipes` 保存家庭菜谱
+
+- 配置：`redis`、`weather`、`ai.*` 见 `config.yaml.example`
 
 ## 测试（严格 TDD，强制）
 
@@ -149,5 +160,6 @@ GOTOOLCHAIN=go1.24.0 CGO_ENABLED=1 go test ./... -count=1
 | 通知调度   | `internal/service/notification.go`                      |
 | 新通知通道  | `internal/service/notifier/<channel>.go`                |
 | 配置项    | `config/config.go`、`config.yaml.example`                |
+| 全局菜谱库  | `internal/service/catalog_recipe.go`、`internal/handler/catalog_recipe.go` |
 
 

@@ -166,7 +166,22 @@ wechat: {appid: wx, secret: sec}
 	if AppConfig.Weather.DefaultCity != "成都" {
 		t.Fatalf("默认城市成都, got %q", AppConfig.Weather.DefaultCity)
 	}
-	if AppConfig.AI.RateLimit.MaxRequests != 3 {
-		t.Fatalf("默认 AI 限流 3 次, got %d", AppConfig.AI.RateLimit.MaxRequests)
+	if AppConfig.AI.RateLimit.Recommend.MaxRequests != 5 {
+		t.Fatalf("默认 recommend 限流 5 次, got %d", AppConfig.AI.RateLimit.Recommend.MaxRequests)
+	}
+	if AppConfig.AI.RateLimit.Catalog.WindowHours != 2 {
+		t.Fatalf("默认 catalog 窗口 2h, got %d", AppConfig.AI.RateLimit.Catalog.WindowHours)
+	}
+}
+
+func TestCatalogRecipeEnabled(t *testing.T) {
+	cfg := &Config{AI: AIConfig{RecommendEnabled: true}}
+	if !cfg.CatalogRecipeEnabled() {
+		t.Fatal("recommend 开启时 catalog 默认应开启")
+	}
+	disabled := false
+	cfg.AI.CatalogEnabled = &disabled
+	if cfg.CatalogRecipeEnabled() {
+		t.Fatal("catalog_enabled=false 时应关闭")
 	}
 }

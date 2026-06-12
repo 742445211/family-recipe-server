@@ -40,15 +40,22 @@ weather:
 
 ai:
   recommend_enabled: true   # false 时前端隐藏 AI 推荐，/api/ai/* 返回 403
+  catalog_enabled: true     # false 时关闭 /api/catalog-recipes/*（默认随 recommend_enabled）
+  catalog_default_variant_label: "经典做法"
   api_key: ""
   base_url: "https://api.deepseek.com"
   model: "deepseek-chat"
   recommend_cache_ttl_hours: 24
   recommend_count: 5
   rate_limit:
-    enabled: true
-    max_requests: 3
-    window_hours: 3
+    recommend:
+      enabled: true
+      max_requests: 5
+      window_hours: 2
+    catalog:
+      enabled: true
+      max_requests: 5
+      window_hours: 2
 
 notification:
   enabled: true

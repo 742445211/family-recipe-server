@@ -86,22 +86,33 @@ type WeatherConfig struct {
 	CacheTTLHours int     `yaml:"cache_ttl_hours"`
 }
 
-// AIRateLimitConfig AI 推荐限流。
+// AIRateLimitScopeConfig 单场景 AI 限流配置。
+type AIRateLimitScopeConfig struct {
+	Enabled     bool `yaml:"enabled"`
+	MaxRequests int  `yaml:"max_requests"`
+	WindowHours int  `yaml:"window_hours"`
+}
+
+// AIRateLimitConfig AI 限流（recommend / catalog 分场景；扁平字段兼容旧配置）。
 type AIRateLimitConfig struct {
-	Enabled      bool `yaml:"enabled"`
-	MaxRequests  int  `yaml:"max_requests"`
-	WindowHours  int  `yaml:"window_hours"`
+	Enabled     bool                   `yaml:"enabled"`
+	MaxRequests int                    `yaml:"max_requests"`
+	WindowHours int                    `yaml:"window_hours"`
+	Recommend   AIRateLimitScopeConfig `yaml:"recommend"`
+	Catalog     AIRateLimitScopeConfig `yaml:"catalog"`
 }
 
 // AIConfig AI 大模型服务配置（兼容 OpenAI API 格式）。
 type AIConfig struct {
-	APIKey                 string            `yaml:"api_key"`
-	BaseURL                string            `yaml:"base_url"`
-	Model                  string            `yaml:"model"`
-	RecommendEnabled       bool              `yaml:"recommend_enabled"` // 是否开放 AI 推荐（前端入口 + API）
-	RecommendCacheTTLHours int               `yaml:"recommend_cache_ttl_hours"`
-	RecommendCount         int               `yaml:"recommend_count"`
-	RateLimit              AIRateLimitConfig `yaml:"rate_limit"`
+	APIKey                     string            `yaml:"api_key"`
+	BaseURL                    string            `yaml:"base_url"`
+	Model                      string            `yaml:"model"`
+	RecommendEnabled           bool              `yaml:"recommend_enabled"` // 是否开放 AI 推荐（前端入口 + API）
+	CatalogEnabled             *bool             `yaml:"catalog_enabled"`   // nil 时默认同 recommend_enabled
+	CatalogDefaultVariantLabel string            `yaml:"catalog_default_variant_label"`
+	RecommendCacheTTLHours     int               `yaml:"recommend_cache_ttl_hours"`
+	RecommendCount             int               `yaml:"recommend_count"`
+	RateLimit                  AIRateLimitConfig `yaml:"rate_limit"`
 }
 
 // NotificationConfig 厨师点菜通知总配置。
@@ -186,6 +197,52 @@ func (c *Config) AIRecommendEnabled() bool {
 		return false
 	}
 	return c.AI.RecommendEnabled
+}
+
+// CatalogRecipeEnabled 是否开放全局菜谱搜索/生成（/api/catalog-recipes/*）。
+func (c *Config) CatalogRecipeEnabled() bool {
+	if c == nil || !c.AI.RecommendEnabled {
+		return false
+	}
+	if c.AI.CatalogEnabled != nil {
+		return *c.AI.CatalogEnabled
+	}
+	return true
+}
+
+// EffectiveCatalogDefaultVariantLabel 全局库首条做法的默认标签。
+func (c *Config) EffectiveCatalogDefaultVariantLabel() string {
+	if c == nil || strings.TrimSpace(c.AI.CatalogDefaultVariantLabel) == "" {
+		return "经典做法"
+	}
+	return strings.TrimSpace(c.AI.CatalogDefaultVariantLabel)
+}
+
+// RateLimitForScope 返回指定场景的限流配置（recommend / catalog）。
+func (c *Config) RateLimitForScope(scope string) AIRateLimitScopeConfig {
+	def := AIRateLimitScopeConfig{Enabled: true, MaxRequests: 5, WindowHours: 2}
+	if c == nil {
+		return def
+	}
+	var scoped AIRateLimitScopeConfig
+	if scope == "catalog" {
+		scoped = c.AI.RateLimit.Catalog
+	} else {
+		scoped = c.AI.RateLimit.Recommend
+	}
+	if scoped.MaxRequests == 0 {
+		scoped.MaxRequests = def.MaxRequests
+	}
+	if scoped.WindowHours == 0 {
+		scoped.WindowHours = def.WindowHours
+	}
+	// 子场景未单独配置 enabled 时，回退到旧版扁平 enabled
+	if scope == "recommend" && c.AI.RateLimit.Recommend.MaxRequests == c.AI.RateLimit.MaxRequests && c.AI.RateLimit.MaxRequests > 0 {
+		if !c.AI.RateLimit.Recommend.Enabled && c.AI.RateLimit.Enabled {
+			scoped.Enabled = true
+		}
+	}
+	return scoped
 }
 
 // WeChatConfigured 小程序 AppID / Secret 是否已配置。
@@ -303,11 +360,40 @@ func applyRedisWeatherAIDefaults(c *Config) {
 	if c.AI.RecommendCount == 0 {
 		c.AI.RecommendCount = 5
 	}
-	if c.AI.RateLimit.MaxRequests == 0 {
-		c.AI.RateLimit.MaxRequests = 3
+	applyAIRateLimitDefaults(&c.AI.RateLimit)
+	if c.AI.CatalogDefaultVariantLabel == "" {
+		c.AI.CatalogDefaultVariantLabel = "经典做法"
 	}
-	if c.AI.RateLimit.WindowHours == 0 {
-		c.AI.RateLimit.WindowHours = 3
+}
+
+func applyAIRateLimitDefaults(rl *AIRateLimitConfig) {
+	defMax, defWin := 5, 2
+
+	if rl.Recommend.MaxRequests == 0 {
+		if rl.MaxRequests > 0 {
+			rl.Recommend.MaxRequests = rl.MaxRequests
+		} else {
+			rl.Recommend.MaxRequests = defMax
+		}
+	}
+	if rl.Recommend.WindowHours == 0 {
+		if rl.WindowHours > 0 {
+			rl.Recommend.WindowHours = rl.WindowHours
+		} else {
+			rl.Recommend.WindowHours = defWin
+		}
+	}
+	if !rl.Recommend.Enabled && rl.Recommend.MaxRequests > 0 {
+		rl.Recommend.Enabled = true
+	}
+	if rl.Catalog.MaxRequests == 0 {
+		rl.Catalog.MaxRequests = defMax
+	}
+	if rl.Catalog.WindowHours == 0 {
+		rl.Catalog.WindowHours = defWin
+	}
+	if !rl.Catalog.Enabled && rl.Catalog.MaxRequests > 0 {
+		rl.Catalog.Enabled = true
 	}
 }
 

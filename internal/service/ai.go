@@ -151,3 +151,79 @@ func (s *AIService) recommendStructured(actx *AIRecommendContext, count int, use
 	}
 	return chatResp.Choices[0].Message.Content, nil
 }
+
+// GenerateRecipeByName 按菜名生成单道完整菜谱；existingVariants 非空时要求不同做法。
+func (s *AIService) GenerateRecipeByName(name string, existingVariants []VariantSummary) (AIRecommendItemInput, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return AIRecommendItemInput{}, fmt.Errorf("菜名不能为空")
+	}
+
+	variantBlock := ""
+	if len(existingVariants) > 0 {
+		parts := make([]string, 0, len(existingVariants))
+		for _, v := range existingVariants {
+			parts = append(parts, fmt.Sprintf("- %s（%s）", v.VariantLabel, v.Summary))
+		}
+		variantBlock = fmt.Sprintf("\n已有做法（请生成风格/技法明显不同的新做法，并给出合适的 variant_label 作为分类标签）：\n%s\n", strings.Join(parts, "\n"))
+	}
+
+	systemPrompt := fmt.Sprintf(`你是家庭菜谱助手，请为指定菜名生成一道完整、家常、可操作的菜谱。
+%s
+要求：
+1. name 必须与用户指定的菜名完全一致
+2. 食材易得、步骤清晰；ingredients、seasonings、steps 必须是 JSON 字符串（与数据库一致），不是嵌套对象
+3. category 用简短中文分类（如家常菜、川菜）
+4. difficulty 填 easy/medium/hard；cook_time 为分钟数
+
+必须只返回合法 JSON，不要 markdown，格式：
+{"items":[{"name":"%s","category":"分类","difficulty":"easy或medium或hard","cook_time":分钟数,"ingredients":"[{\"name\":\"食材\",\"amount\":\"用量\"}]","seasonings":"[]","steps":"[\"步骤1\"]","tips":"小贴士","reason":""}]}`, variantBlock, name)
+
+	model := "deepseek-chat"
+	apiKey := ""
+	if config.AppConfig != nil {
+		if config.AppConfig.AI.Model != "" {
+			model = config.AppConfig.AI.Model
+		}
+		apiKey = config.AppConfig.AI.APIKey
+	}
+
+	req := ChatRequest{
+		Model: model,
+		Messages: []ChatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: fmt.Sprintf("请生成「%s」的完整菜谱，只返回 JSON", name)},
+		},
+		ResponseFormat: &struct {
+			Type string `json:"type"`
+		}{Type: "json_object"},
+	}
+	body, _ := json.Marshal(req)
+	httpReq, err := http.NewRequest(http.MethodPost, s.baseURL+"/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return AIRecommendItemInput{}, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := s.client.Do(httpReq)
+	if err != nil {
+		return AIRecommendItemInput{}, fmt.Errorf("AI请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var chatResp ChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return AIRecommendItemInput{}, fmt.Errorf("AI响应解析失败: %w", err)
+	}
+	if len(chatResp.Choices) == 0 {
+		return AIRecommendItemInput{}, fmt.Errorf("AI未返回结果")
+	}
+	items, err := parseAIRecommendJSON(chatResp.Choices[0].Message.Content)
+	if err != nil {
+		return AIRecommendItemInput{}, err
+	}
+	out := items[0]
+	out.Name = name
+	return out, nil
+}

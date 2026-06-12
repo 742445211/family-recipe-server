@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -61,6 +62,34 @@ func TestAIServiceRecommendStructuredEmptyChoices(t *testing.T) {
 	_, err := svc.RecommendStructured(&AIRecommendContext{}, 1)
 	if err == nil {
 		t.Fatal("空 choices 应返回错误")
+	}
+}
+
+func TestAIServiceGenerateRecipeByName(t *testing.T) {
+	oldCfg := config.AppConfig
+	config.AppConfig = &config.Config{
+		AI: config.AIConfig{Model: "test-model", APIKey: "key"},
+	}
+	t.Cleanup(func() { config.AppConfig = oldCfg })
+
+	body := `{"items":[{"name":"番茄炒蛋","category":"家常菜","difficulty":"easy","cook_time":15,"ingredients":"[]","seasonings":"[]","steps":"[\"炒\"]","tips":"","reason":""}]}`
+	quoted, _ := json.Marshal(body)
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":` + string(quoted) + `}}]}`)),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+		}, nil
+	})}
+
+	svc := NewAIServiceWithClient(client)
+	svc.baseURL = "http://ai.test"
+	out, err := svc.GenerateRecipeByName("番茄炒蛋", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Name != "番茄炒蛋" || out.Category != "家常菜" {
+		t.Fatalf("%+v", out)
 	}
 }
 

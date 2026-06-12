@@ -21,14 +21,17 @@ func NewAppHandler() *AppHandler {
 // 返回前端可见的功能开关（无需登录）。
 func (h *AppHandler) Features(c *gin.Context) {
 	aiRecommend := false
+	catalogRecipe := false
 	if config.AppConfig != nil {
 		aiRecommend = config.AppConfig.AIRecommendEnabled()
+		catalogRecipe = config.AppConfig.CatalogRecipeEnabled()
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "ok",
 		"data": gin.H{
-			"ai_recommend": aiRecommend,
+			"ai_recommend":   aiRecommend,
+			"catalog_recipe": catalogRecipe,
 		},
 	})
 }

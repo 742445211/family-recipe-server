@@ -121,6 +121,12 @@ func TestAIRecommendServiceRecommend(t *testing.T) {
 	if draft.FamilyID != fid || draft.Name != "新菜" {
 		t.Fatalf("%+v", draft)
 	}
+
+	var catalogCount int64
+	db.Model(&model.CatalogRecipe{}).Count(&catalogCount)
+	if catalogCount != 1 {
+		t.Fatalf("AI 推荐应写入 catalog_recipes, count=%d", catalogCount)
+	}
 }
 
 func TestAIRecommendUsesMealOverride(t *testing.T) {

@@ -40,6 +40,7 @@ func main() {
 		&model.FamilyMember{},
 		&model.RecipeCategory{},
 		&model.Recipe{},
+		&model.CatalogRecipe{},
 		&model.DailyOrder{},
 		&model.Favorite{},
 		&model.Notification{},
@@ -74,7 +75,9 @@ func main() {
 	rateLimitSvc := service.NewAIRateLimitService(redisCache)
 	aiCtxSvc := service.NewAIContextService(db, weatherSvc)
 	aiRecommendSvc := service.NewAIRecommendService(db, redisCache, aiSvc, aiCtxSvc, rateLimitSvc)
+	catalogSvc := service.NewCatalogRecipeService(db, aiSvc, rateLimitSvc)
 	aiH := handler.NewAIHandler(aiRecommendSvc, weatherSvc)
+	catalogH := handler.NewCatalogRecipeHandler(catalogSvc)
 
 	// 4. 创建 Gin 路由引擎（带默认中间件：Logger + Recovery）
 	r := gin.Default()
@@ -154,6 +157,11 @@ func main() {
 			auth.GET("/ai/items/:item_id", aiH.GetItem)
 			auth.POST("/ai/items/:item_id/import-recipe", aiH.ImportRecipe)
 			auth.POST("/ai/items/:item_id/add-order", aiH.AddOrder)
+
+			// 全局菜谱库（搜索/生成）
+			auth.POST("/catalog-recipes/lookup", catalogH.Lookup)
+			auth.GET("/catalog-recipes/:id", catalogH.Get)
+			auth.POST("/catalog-recipes/:id/use", catalogH.Use)
 		}
 	}
 

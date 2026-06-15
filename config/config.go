@@ -22,6 +22,7 @@ type Config struct {
 	AI           AIConfig           `yaml:"ai"`           // AI 服务配置
 	Weather      WeatherConfig      `yaml:"weather"`      // 天气服务配置
 	Notification NotificationConfig `yaml:"notification"` // 厨师通知配置
+	ImageWorker  ImageWorkerConfig  `yaml:"image_worker"` // 树莓派图片处理网关
 }
 
 // ServerConfig HTTP 服务器配置。
@@ -191,6 +192,15 @@ type NotificationWorker struct {
 	PollIntervalSec int  `yaml:"poll_interval_sec"`
 }
 
+// ImageWorkerConfig 树莓派图片处理网关 WebSocket 配置。
+type ImageWorkerConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	Path            string `yaml:"path"`
+	Token           string `yaml:"token"`
+	PingIntervalSec int    `yaml:"ping_interval_sec"`
+	ReadTimeoutSec  int    `yaml:"read_timeout_sec"`
+}
+
 // AIRecommendEnabled 是否开放 AI 推荐功能（前端入口与 /api/ai/* 接口）。
 func (c *Config) AIRecommendEnabled() bool {
 	if c == nil {
@@ -331,8 +341,22 @@ func Load(path string) error {
 		AppConfig.Server.Mode = "debug"
 	}
 	applyNotificationDefaults(AppConfig)
+	applyImageWorkerDefaults(AppConfig)
 	applyRedisWeatherAIDefaults(AppConfig)
 	return nil
+}
+
+func applyImageWorkerDefaults(c *Config) {
+	iw := &c.ImageWorker
+	if iw.Path == "" {
+		iw.Path = "/api/ws/image-worker"
+	}
+	if iw.PingIntervalSec == 0 {
+		iw.PingIntervalSec = 30
+	}
+	if iw.ReadTimeoutSec == 0 {
+		iw.ReadTimeoutSec = 120
+	}
 }
 
 func applyRedisWeatherAIDefaults(c *Config) {

@@ -58,6 +58,35 @@ func SaveImage(file multipart.File, header *multipart.FileHeader) (string, strin
 	return key, url, nil
 }
 
+// BuildObjectURL 根据 OSS key 构建可访问 URL。
+func BuildObjectURL(key string) (string, error) {
+	if config.AppConfig == nil {
+		return "", fmt.Errorf("oss not configured")
+	}
+	cfg := config.AppConfig.OSS
+	if cfg.Bucket == "" || cfg.Endpoint == "" {
+		return "", fmt.Errorf("oss not configured")
+	}
+	if cfg.CustomDomain != "" {
+		return fmt.Sprintf("%s/%s", cfg.CustomDomain, key), nil
+	}
+	return fmt.Sprintf("https://%s.%s/%s", cfg.Bucket, cfg.Endpoint, key), nil
+}
+
+// DeleteObject 删除 OSS 对象。
+func DeleteObject(key string) error {
+	cfg := config.AppConfig.OSS
+	client, err := oss.New(cfg.Endpoint, cfg.AccessKeyID, cfg.AccessKeySecret)
+	if err != nil {
+		return fmt.Errorf("OSS连接失败: %w", err)
+	}
+	bucket, err := client.Bucket(cfg.Bucket)
+	if err != nil {
+		return fmt.Errorf("获取Bucket失败: %w", err)
+	}
+	return bucket.DeleteObject(key)
+}
+
 // uploadToOSS 底层 OSS 对象上传函数，将文件流写入指定的 Bucket。
 //
 // 参数:
@@ -105,8 +134,5 @@ func uploadToOSS(cfg config.OSSConfig, key string, reader io.Reader, size int64,
 	}
 
 	// 构建访问 URL：优先使用自定义域名（如 CDN），否则拼接 OSS 默认域名
-	if cfg.CustomDomain != "" {
-		return fmt.Sprintf("%s/%s", cfg.CustomDomain, key), nil
-	}
-	return fmt.Sprintf("https://%s.%s/%s", cfg.Bucket, cfg.Endpoint, key), nil
+	return BuildObjectURL(key)
 }

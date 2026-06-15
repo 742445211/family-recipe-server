@@ -105,3 +105,10 @@ notification:
   worker:
     enabled: true
     poll_interval_sec: 30
+
+image_worker:
+  enabled: true
+  path: "/api/ws/image-worker"
+  token: "CHANGE_ME_GATEWAY_SECRET"
+  ping_interval_sec: 30
+  read_timeout_sec: 120

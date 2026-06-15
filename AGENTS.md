@@ -17,6 +17,7 @@ config/
   config.go                    # 配置结构体与默认值
 config.yaml                    # 运行时配置（含 notification 块）
 migrations/                    # SQL 迁移（001 初始化，002 通知表）
+api-doc/                       # HTTP 接口文档（与 main.go / handler 同步维护）
 internal/
   handler/                     # Gin HTTP 处理器
   service/                     # 业务逻辑
@@ -65,6 +66,33 @@ pkg/jwt/                       # JWT 签发与解析
 ```
 
 业务错误用 400 + `code` 字段；401 由 `middleware.AuthRequired` 返回。
+
+## API 文档（api-doc/）
+
+**凡新增、修改、删除 HTTP 路由或请求/响应字段，必须在同一改动中同步更新 `api-doc/`。** 前端联调以该目录为准。
+
+### 维护步骤
+
+1. 改 `internal/handler/*.go` 与 `main.go` 路由。
+2. 更新 `api-doc/` 对应模块 markdown（见 `api-doc/README.md` 索引）；新增模块时补文件并在 README 总览表加一行。
+3. 在模块文档末尾「变更记录」追加一行（日期 + 摘要）。
+4. 提交时 `api-doc/` 与代码一并 commit，禁止只改代码不更新文档。
+
+### 文档结构
+
+| 文件 | 内容 |
+| --- | --- |
+| `api-doc/README.md` | 索引、接口总览表、维护说明 |
+| `api-doc/overview.md` | 鉴权、响应格式、功能开关、限流 |
+| `api-doc/auth-user.md` | 登录、用户 |
+| `api-doc/family.md` | 家庭 |
+| `api-doc/recipe-category.md` | 家庭菜谱、分类 |
+| `api-doc/catalog.md` | 全局菜谱库 |
+| `api-doc/order-favorite.md` | 点菜、收藏 |
+| `api-doc/ai-weather.md` | AI 推荐、天气 |
+| `api-doc/notification-upload-ws.md` | 通知、上传、WebSocket |
+
+权威来源：`main.go` 路由 > handler 实现 > `api-doc`。冲突时以代码为准并立即修文档。
 
 ## AI 推荐（结构化 + Redis）
 
@@ -147,6 +175,7 @@ GOTOOLCHAIN=go1.24.0 CGO_ENABLED=1 go test ./... -count=1
 
 ## 相关文档
 
+- **HTTP 接口（本仓库）**：`api-doc/README.md`
 - 通知方案（前后端共同依据）：`family-recipe-miniapp/docs/chef-notification-plan.md`
 - 部署命令：`family-recipe-miniapp/docs/deploy-ubuntu-24.04.md`
 
@@ -155,11 +184,12 @@ GOTOOLCHAIN=go1.24.0 CGO_ENABLED=1 go test ./... -count=1
 
 | 任务     | 主要文件                                                    |
 | ------ | ------------------------------------------------------- |
-| 新增 API | `internal/handler/*.go` + `main.go` 路由                  |
+| 新增 API | `internal/handler/*.go` + `main.go` 路由 + **`api-doc/` 对应模块** |
 | 点菜逻辑   | `internal/service/order.go`、`internal/handler/order.go` |
 | 通知调度   | `internal/service/notification.go`                      |
 | 新通知通道  | `internal/service/notifier/<channel>.go`                |
 | 配置项    | `config/config.go`、`config.yaml.example`                |
 | 全局菜谱库  | `internal/service/catalog_recipe.go`、`internal/handler/catalog_recipe.go` |
+| 接口文档   | `api-doc/*.md`（路由变更时必更）                              |
 
 

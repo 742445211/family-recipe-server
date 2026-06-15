@@ -54,6 +54,8 @@ func main() {
 	}
 
 	wsHub := service.NewWebSocketHub()
+	imageWorkerHub := service.NewImageWorkerHub(nil)
+	imageWorkerSvc := service.NewImageWorkerService(db, imageWorkerHub)
 	notifySvc := service.NewNotificationService(db, wsHub)
 	wsHub.SetOnConnect(func(userID uint64) {
 		notifySvc.FlushUnreadWebSocket(userID)
@@ -149,7 +151,7 @@ func main() {
 			auth.GET("/favorites", favH.List)          // 收藏列表
 
 			// 图片上传
-			uploadH := &handler.UploadHandler{}
+			uploadH := &handler.UploadHandler{ImageWorker: imageWorkerSvc}
 			auth.POST("/upload", uploadH.Upload)
 
 			// AI 智能推荐
@@ -171,6 +173,15 @@ func main() {
 		wsPath = "/api/ws"
 	}
 	r.GET(wsPath, wsHub.HandleWebSocket)
+
+	if config.AppConfig.ImageWorker.Enabled {
+		iwPath := config.AppConfig.ImageWorker.Path
+		if iwPath == "" {
+			iwPath = "/api/ws/image-worker"
+		}
+		r.GET(iwPath, imageWorkerHub.HandleWebSocket)
+		log.Printf("ImageWorker WebSocket: %s (WSS via nginx)", iwPath)
+	}
 
 	// 启动 HTTP 服务器
 	addr := fmt.Sprintf(":%d", config.AppConfig.Server.Port)

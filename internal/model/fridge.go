@@ -41,3 +41,11 @@ type FridgeScan struct {
 }
 
 func (FridgeScan) TableName() string { return "fridge_scans" }
+
+// BeforeCreate 确保 JSON 列不为空字符串（MySQL JSON 不接受 ""）。
+func (s *FridgeScan) BeforeCreate(tx *gorm.DB) error {
+	if s.RecognizedItems == "" {
+		s.RecognizedItems = "[]"
+	}
+	return nil
+}

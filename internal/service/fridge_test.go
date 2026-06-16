@@ -65,6 +65,9 @@ func TestFridgeCreateScanDispatch(t *testing.T) {
 	if scan.Status != FridgeScanProcessing || scan.TaskID == "" {
 		t.Fatalf("scan=%+v", scan)
 	}
+	if scan.RecognizedItems != "[]" {
+		t.Fatalf("recognized_items should be [] on create, got %q", scan.RecognizedItems)
+	}
 	if disp.lastScanID != scan.ID || disp.lastTaskID != scan.TaskID {
 		t.Fatalf("dispatch scan_id=%d task=%s", disp.lastScanID, disp.lastTaskID)
 	}

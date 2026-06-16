@@ -71,7 +71,8 @@ Authorization: Bearer <token>
 ```json
 {
   "ai_recommend": true,
-  "catalog_recipe": true
+  "catalog_recipe": true,
+  "fridge": true
 }
 ```
 
@@ -79,6 +80,7 @@ Authorization: Bearer <token>
 |------|--------|------|
 | `ai_recommend` | `ai.recommend_enabled` | 关闭时 `/api/ai/*` 返回 403 |
 | `catalog_recipe` | `ai.catalog_enabled`（默认随 recommend） | 关闭时 `/api/catalog-recipes/*` 返回 403 |
+| `fridge` | `fridge.enabled`（默认 true） | 关闭时 `/api/fridge/*` 返回 403 |
 
 ## AI 限流（独立计数）
 

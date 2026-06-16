@@ -13,16 +13,27 @@ import (
 	"gorm.io/gorm"
 )
 
+// FridgeRecognizer 冰箱拍照识别结果回调。
+type FridgeRecognizer interface {
+	ApplyRecognizeResult(scanID uint64, detail json.RawMessage) error
+	ApplyRecognizeFailure(scanID uint64, errMsg string) error
+}
+
 // ImageWorkerService 向树莓派网关派发图片任务并处理结果。
 type ImageWorkerService struct {
-	db  *gorm.DB
-	hub *ImageWorkerHub
+	db     *gorm.DB
+	hub    *ImageWorkerHub
+	fridge FridgeRecognizer
 }
 
 func NewImageWorkerService(db *gorm.DB, hub *ImageWorkerHub) *ImageWorkerService {
 	s := &ImageWorkerService{db: db, hub: hub}
 	hub.onResult = s.handleTaskResult
 	return s
+}
+
+func (s *ImageWorkerService) SetFridgeRecognizer(fr FridgeRecognizer) {
+	s.fridge = fr
 }
 
 func (s *ImageWorkerService) DispatchCompress(ossKey, ossURL string, recipeID uint64) {
@@ -63,6 +74,44 @@ func (s *ImageWorkerService) DispatchRecognize(ossKey, ossURL string, recipeID u
 	}
 }
 
+// DispatchFridgeRecognize 派发冰箱食材识别任务，taskID 须与 fridge_scans.task_id 一致。
+func (s *ImageWorkerService) DispatchFridgeRecognize(scanID uint64, taskID, ossKey, ossURL string) bool {
+	if s.hub == nil || !s.hub.IsConnected() {
+		log.Printf("[ImageWorker] skip fridge recognize (offline): scan=%d", scanID)
+		return false
+	}
+	if taskID == "" {
+		taskID = uuid.NewString()
+	}
+	task := map[string]any{
+		"type":    "task",
+		"task_id": taskID,
+		"action":  "recognize",
+		"oss_key": ossKey,
+		"oss_url": ossURL,
+		"meta":    map[string]any{"scope": "fridge", "scan_id": scanID},
+	}
+	if !s.hub.SendTask(task) {
+		log.Printf("[ImageWorker] failed to dispatch fridge recognize: scan=%d", scanID)
+		return false
+	}
+	return true
+}
+
+type taskMeta struct {
+	Scope    string `json:"scope"`
+	ScanID   uint64 `json:"scan_id"`
+	RecipeID uint64 `json:"recipe_id"`
+}
+
+func parseTaskMeta(raw json.RawMessage) taskMeta {
+	var m taskMeta
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &m)
+	}
+	return m
+}
+
 func (s *ImageWorkerService) handleTaskResult(data []byte) {
 	var msg struct {
 		Type     string          `json:"type"`
@@ -72,23 +121,40 @@ func (s *ImageWorkerService) handleTaskResult(data []byte) {
 		OssKey   string          `json:"oss_key"`
 		ErrorMsg string          `json:"error_msg"`
 		Detail   json.RawMessage `json:"detail"`
-		Meta     struct {
-			RecipeID uint64 `json:"recipe_id"`
-		} `json:"meta"`
+		Meta     json.RawMessage `json:"meta"`
 	}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		log.Printf("[ImageWorker] bad task_result: %v", err)
 		return
 	}
+	meta := parseTaskMeta(msg.Meta)
+
 	if msg.Status != "ok" {
 		log.Printf("[ImageWorker] task %s error: %s", msg.TaskID, msg.ErrorMsg)
+		if msg.Action == "recognize" && meta.Scope == "fridge" && meta.ScanID > 0 && s.fridge != nil {
+			_ = s.fridge.ApplyRecognizeFailure(meta.ScanID, msg.ErrorMsg)
+		}
 		return
 	}
 	switch msg.Action {
 	case "compress":
-		s.handleCompressResult(msg.OssKey, msg.Meta.RecipeID, msg.Detail)
+		s.handleCompressResult(msg.OssKey, meta.RecipeID, msg.Detail)
 	case "recognize":
-		s.handleRecognizeResult(msg.Meta.RecipeID, msg.Detail)
+		if meta.Scope == "fridge" && meta.ScanID > 0 {
+			s.handleFridgeRecognizeResult(meta.ScanID, msg.Detail)
+		} else {
+			s.handleRecognizeResult(meta.RecipeID, msg.Detail)
+		}
+	}
+}
+
+func (s *ImageWorkerService) handleFridgeRecognizeResult(scanID uint64, detail json.RawMessage) {
+	if s.fridge == nil {
+		log.Printf("[ImageWorker] fridge recognizer not set scan=%d", scanID)
+		return
+	}
+	if err := s.fridge.ApplyRecognizeResult(scanID, detail); err != nil {
+		log.Printf("[ImageWorker] fridge recognize scan=%d: %v", scanID, err)
 	}
 }
 

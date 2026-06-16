@@ -15,6 +15,7 @@
 | [order-favorite.md](./order-favorite.md) | 点菜、收藏、分享 |
 | [ai-weather.md](./ai-weather.md) | AI 推荐、天气 |
 | [notification-upload-ws.md](./notification-upload-ws.md) | 通知、通知通道、上传、WebSocket |
+| [fridge.md](./fridge.md) | 冰箱食材、拍照识别 |
 
 ## 接口总览
 
@@ -59,6 +60,13 @@
 | POST | `/catalog-recipes/lookup` | 必填 | 全局库查/生成 |
 | GET | `/catalog-recipes/:id` | 必填 | 全局库详情 |
 | POST | `/catalog-recipes/:id/use` | 必填 | 全局库使用计数 |
+| GET | `/fridge/items` | 必填 | 冰箱库存列表 |
+| POST | `/fridge/items` | 必填 | 手动新增食材 |
+| PUT | `/fridge/items/:id` | 必填 | 更新食材 |
+| DELETE | `/fridge/items/:id` | 必填 | 删除食材 |
+| POST | `/fridge/scans` | 必填 | 拍照识别 |
+| GET | `/fridge/scans/:id` | 必填 | 轮询识别结果 |
+| POST | `/fridge/scans/:id/confirm` | 必填 | 确认入库 |
 | GET | `/api/ws` | Token(query) | WebSocket 通知 |
 
 ## 维护说明（Agent / 开发者必读）

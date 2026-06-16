@@ -23,6 +23,7 @@ type Config struct {
 	Weather      WeatherConfig      `yaml:"weather"`      // 天气服务配置
 	Notification NotificationConfig `yaml:"notification"` // 厨师通知配置
 	ImageWorker  ImageWorkerConfig  `yaml:"image_worker"` // 树莓派图片处理网关
+	Fridge       FridgeConfig       `yaml:"fridge"`       // 冰箱食材功能
 }
 
 // ServerConfig HTTP 服务器配置。
@@ -201,6 +202,22 @@ type ImageWorkerConfig struct {
 	ReadTimeoutSec  int    `yaml:"read_timeout_sec"`
 }
 
+// FridgeConfig 冰箱食材功能开关。
+type FridgeConfig struct {
+	Enabled *bool `yaml:"enabled"`
+}
+
+// FridgeEnabled 是否开放冰箱功能（/api/fridge/*）。
+func (c *Config) FridgeEnabled() bool {
+	if c == nil {
+		return true
+	}
+	if c.Fridge.Enabled == nil {
+		return true
+	}
+	return *c.Fridge.Enabled
+}
+
 // AIRecommendEnabled 是否开放 AI 推荐功能（前端入口与 /api/ai/* 接口）。
 func (c *Config) AIRecommendEnabled() bool {
 	if c == nil {
@@ -342,6 +359,7 @@ func Load(path string) error {
 	}
 	applyNotificationDefaults(AppConfig)
 	applyImageWorkerDefaults(AppConfig)
+	applyFridgeDefaults(AppConfig)
 	applyRedisWeatherAIDefaults(AppConfig)
 	return nil
 }
@@ -356,6 +374,13 @@ func applyImageWorkerDefaults(c *Config) {
 	}
 	if iw.ReadTimeoutSec == 0 {
 		iw.ReadTimeoutSec = 120
+	}
+}
+
+func applyFridgeDefaults(c *Config) {
+	if c.Fridge.Enabled == nil {
+		t := true
+		c.Fridge.Enabled = &t
 	}
 }
 

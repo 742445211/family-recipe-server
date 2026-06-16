@@ -22,9 +22,11 @@ func NewAppHandler() *AppHandler {
 func (h *AppHandler) Features(c *gin.Context) {
 	aiRecommend := false
 	catalogRecipe := false
+	fridge := true
 	if config.AppConfig != nil {
 		aiRecommend = config.AppConfig.AIRecommendEnabled()
 		catalogRecipe = config.AppConfig.CatalogRecipeEnabled()
+		fridge = config.AppConfig.FridgeEnabled()
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
@@ -32,6 +34,7 @@ func (h *AppHandler) Features(c *gin.Context) {
 		"data": gin.H{
 			"ai_recommend":   aiRecommend,
 			"catalog_recipe": catalogRecipe,
+			"fridge":         fridge,
 		},
 	})
 }

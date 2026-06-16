@@ -38,6 +38,8 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&model.Notification{},
 		&model.NotificationDelivery{},
 		&model.NotificationChannel{},
+		&model.FridgeItem{},
+		&model.FridgeScan{},
 	); err != nil {
 		t.Fatalf("迁移测试表失败: %v", err)
 	}

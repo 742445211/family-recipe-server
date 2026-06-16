@@ -91,13 +91,24 @@ pkg/jwt/                       # JWT 签发与解析
 | `api-doc/order-favorite.md` | 点菜、收藏 |
 | `api-doc/ai-weather.md` | AI 推荐、天气 |
 | `api-doc/notification-upload-ws.md` | 通知、上传、WebSocket |
+| `api-doc/fridge.md` | 冰箱食材、拍照识别 |
 
 权威来源：`main.go` 路由 > handler 实现 > `api-doc`。冲突时以代码为准并立即修文档。
+
+## 冰箱食材（fridge_items / fridge_scans）
+
+- **功能开关**：`fridge.enabled`（默认 `true`）；`GET /api/app/features` → `fridge`
+- `GET/POST/PUT/DELETE /api/fridge/items` — 家庭库存 CRUD（名称、数量、保质期、备注）
+- `POST /api/fridge/scans` — 拍照上传 OSS，经 ImageWorker `recognize`（`meta.scope=fridge`）派发给树莓派
+- `GET /api/fridge/scans/:id` — 轮询识别结果
+- `POST /api/fridge/scans/:id/confirm` — 用户勾选/编辑后写入库存
+- 网关离线时 scan 置 `failed`，HTTP 503 + `worker_offline: true`
+- 配置：`fridge.*`、`image_worker.*` 见 `config.yaml.example`；协议见 `api-doc/fridge.md`
 
 ## AI 推荐（结构化 + Redis）
 
 - **功能开关**：`ai.recommend_enabled`（`config.yaml`）；`false` 时 `/api/ai/*` 返回 403，前端隐藏入口
-- **前端读取**：`GET /api/app/features` → `{ "ai_recommend", "catalog_recipe" }`（公开，无需登录）
+- **前端读取**：`GET /api/app/features` → `{ "ai_recommend", "catalog_recipe", "fridge" }`（公开，无需登录）
 - `POST /api/ai/recommend` → `{ batch_id, items, rate_limit }`；**recommend** 限流：默认 2h / 5 次（429）
 - `GET /api/ai/items/:item_id` — 从 Redis 读草稿
 - `POST /api/ai/items/:item_id/import-recipe` / `add-order` — 从 Redis 入库/点菜
@@ -191,5 +202,6 @@ GOTOOLCHAIN=go1.24.0 CGO_ENABLED=1 go test ./... -count=1
 | 配置项    | `config/config.go`、`config.yaml.example`                |
 | 全局菜谱库  | `internal/service/catalog_recipe.go`、`internal/handler/catalog_recipe.go` |
 | 接口文档   | `api-doc/*.md`（路由变更时必更）                              |
+| 冰箱食材   | `internal/service/fridge.go`、`internal/handler/fridge.go` |
 
 

@@ -46,6 +46,8 @@ func main() {
 		&model.Notification{},
 		&model.NotificationDelivery{},
 		&model.NotificationChannel{},
+		&model.FridgeItem{},
+		&model.FridgeScan{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -56,6 +58,9 @@ func main() {
 	wsHub := service.NewWebSocketHub()
 	imageWorkerHub := service.NewImageWorkerHub(nil)
 	imageWorkerSvc := service.NewImageWorkerService(db, imageWorkerHub)
+	fridgeSvc := service.NewFridgeService(db, imageWorkerSvc)
+	imageWorkerSvc.SetFridgeRecognizer(fridgeSvc)
+	fridgeH := handler.NewFridgeHandler(fridgeSvc)
 	notifySvc := service.NewNotificationService(db, wsHub)
 	wsHub.SetOnConnect(func(userID uint64) {
 		notifySvc.FlushUnreadWebSocket(userID)
@@ -164,6 +169,15 @@ func main() {
 			auth.POST("/catalog-recipes/lookup", catalogH.Lookup)
 			auth.GET("/catalog-recipes/:id", catalogH.Get)
 			auth.POST("/catalog-recipes/:id/use", catalogH.Use)
+
+			// 冰箱食材
+			auth.GET("/fridge/items", fridgeH.ListItems)
+			auth.POST("/fridge/items", fridgeH.CreateItems)
+			auth.PUT("/fridge/items/:id", fridgeH.UpdateItem)
+			auth.DELETE("/fridge/items/:id", fridgeH.DeleteItem)
+			auth.POST("/fridge/scans", fridgeH.CreateScan)
+			auth.GET("/fridge/scans/:id", fridgeH.GetScan)
+			auth.POST("/fridge/scans/:id/confirm", fridgeH.ConfirmScan)
 		}
 	}
 

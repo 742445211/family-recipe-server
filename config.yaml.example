@@ -112,3 +112,6 @@ image_worker:
   token: "CHANGE_ME_GATEWAY_SECRET"
   ping_interval_sec: 30
   read_timeout_sec: 120
+
+fridge:
+  enabled: true

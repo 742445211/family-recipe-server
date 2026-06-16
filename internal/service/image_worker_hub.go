@@ -44,6 +44,7 @@ func (h *ImageWorkerHub) SendTask(payload map[string]any) bool {
 		return false
 	}
 	data, _ := json.Marshal(payload)
+	log.Printf("[ImageWorker] send task: %s", string(data))
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		log.Printf("[ImageWorker] send task failed: %v", err)
 		return false
@@ -134,10 +135,13 @@ func (h *ImageWorkerHub) HandleWebSocket(c *gin.Context) {
 		switch base.Type {
 		case "ping":
 			_ = conn.WriteJSON(map[string]string{"type": "pong"})
-		case "task_result":
+		case "task_result", "result":
+			log.Printf("[ImageWorker] recv %s: %s", base.Type, truncateLog(string(data), 512))
 			if h.onResult != nil {
 				go h.onResult(data)
 			}
+		default:
+			log.Printf("[ImageWorker] recv unknown type=%s: %s", base.Type, truncateLog(string(data), 256))
 		}
 	}
 }
@@ -148,4 +152,11 @@ func requireSecureConnection(c *gin.Context) bool {
 	}
 	proto := strings.ToLower(c.GetHeader("X-Forwarded-Proto"))
 	return proto == "https" || proto == "wss"
+}
+
+func truncateLog(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }

@@ -267,8 +267,11 @@ func (s *FridgeService) ConfirmScan(familyID, userID, scanID uint64, inputs []Fr
 	return created, nil
 }
 
-// ParseRecognizeDetail 解析树莓派识别结果（支持 items 与旧 ingredients 数组）。
+// ParseRecognizeDetail 解析树莓派识别结果（支持 items、ingredients、顶层数组）。
 func ParseRecognizeDetail(detail json.RawMessage) ([]FridgeItemInput, error) {
+	if len(detail) == 0 {
+		return nil, nil
+	}
 	var structured struct {
 		Items []FridgeItemInput `json:"items"`
 	}
@@ -278,17 +281,32 @@ func ParseRecognizeDetail(detail json.RawMessage) ([]FridgeItemInput, error) {
 	var legacy struct {
 		Ingredients []string `json:"ingredients"`
 	}
-	if err := json.Unmarshal(detail, &legacy); err != nil {
-		return nil, err
-	}
-	out := make([]FridgeItemInput, 0, len(legacy.Ingredients))
-	for _, name := range legacy.Ingredients {
-		n := strings.TrimSpace(name)
-		if n != "" {
-			out = append(out, FridgeItemInput{Name: n})
+	if err := json.Unmarshal(detail, &legacy); err == nil && len(legacy.Ingredients) > 0 {
+		out := make([]FridgeItemInput, 0, len(legacy.Ingredients))
+		for _, name := range legacy.Ingredients {
+			n := strings.TrimSpace(name)
+			if n != "" {
+				out = append(out, FridgeItemInput{Name: n})
+			}
 		}
+		return out, nil
 	}
-	return out, nil
+	var names []string
+	if err := json.Unmarshal(detail, &names); err == nil && len(names) > 0 {
+		out := make([]FridgeItemInput, 0, len(names))
+		for _, name := range names {
+			n := strings.TrimSpace(name)
+			if n != "" {
+				out = append(out, FridgeItemInput{Name: n})
+			}
+		}
+		return out, nil
+	}
+	var objs []FridgeItemInput
+	if err := json.Unmarshal(detail, &objs); err == nil && len(objs) > 0 {
+		return objs, nil
+	}
+	return nil, nil
 }
 
 // ScanRecognizedItems 将 scan JSON 解析为候选列表。

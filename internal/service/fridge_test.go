@@ -97,6 +97,11 @@ func TestParseRecognizeDetailItemsAndLegacy(t *testing.T) {
 	if err != nil || len(items) != 2 || items[0].Amount != "" {
 		t.Fatalf("legacy=%+v err=%v", items, err)
 	}
+
+	items, err = ParseRecognizeDetail(json.RawMessage(`["苹果","梨"]`))
+	if err != nil || len(items) != 2 || items[0].Name != "苹果" {
+		t.Fatalf("array=%+v err=%v", items, err)
+	}
 }
 
 func TestFridgeApplyRecognizeAndConfirm(t *testing.T) {

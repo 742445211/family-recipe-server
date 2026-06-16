@@ -56,3 +56,39 @@ func TestImageWorkerFridgeRecognizeResult(t *testing.T) {
 		t.Fatalf("items=%+v", items)
 	}
 }
+
+func TestImageWorkerFridgeRecognizeByTaskIDOnly(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
+	hub := NewImageWorkerHub(nil)
+	iw := NewImageWorkerService(db, hub)
+	fridgeSvc := NewFridgeService(db, iw)
+	iw.SetFridgeRecognizer(fridgeSvc)
+
+	s := model.FridgeScan{
+		FamilyID: familyID, UserID: userID, TaskID: "tid-only",
+		ImageKey: "k", ImageURL: "u", Status: FridgeScanProcessing,
+		RecognizedItems: "[]",
+	}
+	db.Create(&s)
+
+	payload, _ := json.Marshal(map[string]any{
+		"type": "result", "task_id": "tid-only", "status": "success",
+		"detail": map[string]any{"ingredients": []string{"香蕉", "牛奶"}},
+	})
+	iw.handleTaskResult(payload)
+
+	got, err := fridgeSvc.GetScan(familyID, s.ID)
+	if err != nil || got.Status != FridgeScanDone {
+		t.Fatalf("scan=%+v err=%v", got, err)
+	}
+}
+
+func TestTaskResultOK(t *testing.T) {
+	if !taskResultOK("ok") || !taskResultOK("success") || !taskResultOK("SUCCESS") {
+		t.Fatal("expected ok statuses")
+	}
+	if taskResultOK("failed") {
+		t.Fatal("expected failed")
+	}
+}

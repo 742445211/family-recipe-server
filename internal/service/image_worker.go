@@ -112,6 +112,30 @@ func parseTaskMeta(raw json.RawMessage) taskMeta {
 	return m
 }
 
+func taskResultOK(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "ok", "success", "done":
+		return true
+	default:
+		return false
+	}
+}
+
+// lookupFridgeScanID 根据 meta 或 task_id 关联冰箱识别任务（树莓派回传常不带 meta）。
+func (s *ImageWorkerService) lookupFridgeScanID(taskID string, meta taskMeta) uint64 {
+	if meta.Scope == "fridge" && meta.ScanID > 0 {
+		return meta.ScanID
+	}
+	if taskID == "" {
+		return 0
+	}
+	var scan model.FridgeScan
+	if err := s.db.Where("task_id = ?", taskID).First(&scan).Error; err != nil {
+		return 0
+	}
+	return scan.ID
+}
+
 func (s *ImageWorkerService) handleTaskResult(data []byte) {
 	var msg struct {
 		Type     string          `json:"type"`
@@ -128,11 +152,16 @@ func (s *ImageWorkerService) handleTaskResult(data []byte) {
 		return
 	}
 	meta := parseTaskMeta(msg.Meta)
+	scanID := s.lookupFridgeScanID(msg.TaskID, meta)
 
-	if msg.Status != "ok" {
+	if !taskResultOK(msg.Status) {
 		log.Printf("[ImageWorker] task %s error: %s", msg.TaskID, msg.ErrorMsg)
-		if msg.Action == "recognize" && meta.Scope == "fridge" && meta.ScanID > 0 && s.fridge != nil {
-			_ = s.fridge.ApplyRecognizeFailure(meta.ScanID, msg.ErrorMsg)
+		if scanID > 0 && s.fridge != nil {
+			errMsg := msg.ErrorMsg
+			if errMsg == "" {
+				errMsg = "识别失败"
+			}
+			_ = s.fridge.ApplyRecognizeFailure(scanID, errMsg)
 		}
 		return
 	}
@@ -140,10 +169,19 @@ func (s *ImageWorkerService) handleTaskResult(data []byte) {
 	case "compress":
 		s.handleCompressResult(msg.OssKey, meta.RecipeID, msg.Detail)
 	case "recognize":
-		if meta.Scope == "fridge" && meta.ScanID > 0 {
-			s.handleFridgeRecognizeResult(meta.ScanID, msg.Detail)
+		if scanID > 0 {
+			s.handleFridgeRecognizeResult(scanID, msg.Detail)
 		} else {
 			s.handleRecognizeResult(meta.RecipeID, msg.Detail)
+		}
+	default:
+		// 树莓派可能省略 action，按 task_id 关联到冰箱 scan
+		if scanID > 0 && len(msg.Detail) > 0 {
+			s.handleFridgeRecognizeResult(scanID, msg.Detail)
+		} else if meta.RecipeID > 0 {
+			s.handleRecognizeResult(meta.RecipeID, msg.Detail)
+		} else {
+			log.Printf("[ImageWorker] unhandled task_result action=%q task_id=%s", msg.Action, msg.TaskID)
 		}
 	}
 }

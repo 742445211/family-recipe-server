@@ -30,6 +30,7 @@ var (
 	ErrFridgeWorkerOffline     = errors.New("图片识别服务离线")
 	ErrFridgeScanNotConfirmable = errors.New("识别任务不可确认")
 	ErrFridgeConfirmEmpty      = errors.New("请至少选择一条食材")
+	ErrFridgeScanNotRetryable  = errors.New("识别任务不可重试")
 )
 
 // FridgeItemInput 创建/更新/确认食材输入。
@@ -43,6 +44,7 @@ type FridgeItemInput struct {
 // FridgeImageDispatcher 向树莓派派发冰箱识别任务。
 type FridgeImageDispatcher interface {
 	DispatchFridgeRecognize(scanID uint64, taskID, ossKey, ossURL string) bool
+	IsWorkerConnected() bool
 }
 
 // FridgeService 冰箱库存与拍照识别业务。
@@ -161,6 +163,29 @@ func (s *FridgeService) CreateScan(userID, familyID uint64, imageKey, imageURL s
 		return nil, err
 	}
 	return &scan, nil
+}
+
+// RetryScan 对 processing/failed 的识别任务重新派发（同一 task_id）。
+func (s *FridgeService) RetryScan(familyID, scanID uint64) (*model.FridgeScan, error) {
+	scan, err := s.GetScan(familyID, scanID)
+	if err != nil {
+		return nil, err
+	}
+	if scan.Status == FridgeScanConfirmed || scan.Status == FridgeScanDone {
+		return nil, ErrFridgeScanNotRetryable
+	}
+	if s.disp == nil || !s.disp.IsWorkerConnected() {
+		return nil, ErrFridgeWorkerOffline
+	}
+	if !s.disp.DispatchFridgeRecognize(scan.ID, scan.TaskID, scan.ImageKey, scan.ImageURL) {
+		return nil, ErrFridgeWorkerOffline
+	}
+	scan.Status = FridgeScanProcessing
+	scan.ErrorMsg = ""
+	if err := s.db.Save(scan).Error; err != nil {
+		return nil, err
+	}
+	return scan, nil
 }
 
 func (s *FridgeService) GetScan(familyID, scanID uint64) (*model.FridgeScan, error) {

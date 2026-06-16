@@ -216,13 +216,43 @@ func (h *FridgeHandler) GetScan(c *gin.Context) {
 	}
 	items, _ := service.ScanRecognizedItems(scan)
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": gin.H{
-		"id":                scan.ID,
-		"status":            scan.Status,
-		"image_url":         scan.ImageURL,
-		"error_msg":         scan.ErrorMsg,
-		"recognized_items":  items,
-		"confirmed_at":      scan.ConfirmedAt,
+		"id":               scan.ID,
+		"status":           scan.Status,
+		"image_url":        scan.ImageURL,
+		"error_msg":        scan.ErrorMsg,
+		"recognized_items": items,
+		"confirmed_at":     scan.ConfirmedAt,
 	}})
+}
+
+// RetryScan POST /api/fridge/scans/:id/retry
+func (h *FridgeHandler) RetryScan(c *gin.Context) {
+	if fridgeDisabled(c) {
+		return
+	}
+	familyID, ok := requireFamilyID(c)
+	if !ok {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	scan, err := h.svc.RetryScan(familyID, id)
+	if errors.Is(err, service.ErrFridgeScanNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": err.Error()})
+		return
+	}
+	if errors.Is(err, service.ErrFridgeScanNotRetryable) {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+		return
+	}
+	if errors.Is(err, service.ErrFridgeWorkerOffline) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 503, "msg": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": scan})
 }
 
 type fridgeConfirmReq struct {

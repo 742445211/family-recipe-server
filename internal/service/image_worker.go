@@ -74,6 +74,10 @@ func (s *ImageWorkerService) DispatchRecognize(ossKey, ossURL string, recipeID u
 	}
 }
 
+func (s *ImageWorkerService) IsWorkerConnected() bool {
+	return s.hub != nil && s.hub.IsConnected()
+}
+
 // DispatchFridgeRecognize 派发冰箱食材识别任务，taskID 须与 fridge_scans.task_id 一致。
 func (s *ImageWorkerService) DispatchFridgeRecognize(scanID uint64, taskID, ossKey, ossURL string) bool {
 	if s.hub == nil || !s.hub.IsConnected() {

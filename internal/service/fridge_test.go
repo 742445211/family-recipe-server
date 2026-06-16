@@ -11,6 +11,7 @@ import (
 
 type mockFridgeDispatcher struct {
 	dispatched bool
+	connected  bool
 	lastScanID uint64
 	lastTaskID string
 }
@@ -18,6 +19,13 @@ type mockFridgeDispatcher struct {
 func (m *mockFridgeDispatcher) DispatchFridgeRecognize(scanID uint64, taskID, ossKey, ossURL string) bool {
 	m.lastScanID = scanID
 	m.lastTaskID = taskID
+	return m.dispatched
+}
+
+func (m *mockFridgeDispatcher) IsWorkerConnected() bool {
+	if m.connected {
+		return true
+	}
 	return m.dispatched
 }
 

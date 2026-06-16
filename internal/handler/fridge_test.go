@@ -43,6 +43,8 @@ func (f *fridgeTestDispatcher) DispatchFridgeRecognize(scanID uint64, taskID, os
 	return f.ok
 }
 
+func (f *fridgeTestDispatcher) IsWorkerConnected() bool { return f.ok }
+
 func TestFridgeForbiddenWhenDisabled(t *testing.T) {
 	old := config.AppConfig
 	f := false

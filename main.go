@@ -178,6 +178,7 @@ func main() {
 			auth.POST("/fridge/scans", fridgeH.CreateScan)
 			auth.GET("/fridge/scans/:id", fridgeH.GetScan)
 			auth.POST("/fridge/scans/:id/confirm", fridgeH.ConfirmScan)
+			auth.POST("/fridge/scans/:id/retry", fridgeH.RetryScan)
 		}
 	}
 

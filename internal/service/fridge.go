@@ -295,7 +295,7 @@ func (s *FridgeService) ConfirmScan(familyID, userID, scanID uint64, inputs []Fr
 // ParseRecognizeDetail 解析树莓派识别结果（支持 items、ingredients、顶层数组）。
 func ParseRecognizeDetail(detail json.RawMessage) ([]FridgeItemInput, error) {
 	if len(detail) == 0 {
-		return nil, nil
+		return []FridgeItemInput{}, nil
 	}
 	var structured struct {
 		Items []FridgeItemInput `json:"items"`
@@ -331,13 +331,13 @@ func ParseRecognizeDetail(detail json.RawMessage) ([]FridgeItemInput, error) {
 	if err := json.Unmarshal(detail, &objs); err == nil && len(objs) > 0 {
 		return objs, nil
 	}
-	return nil, nil
+	return []FridgeItemInput{}, nil
 }
 
 // ScanRecognizedItems 将 scan JSON 解析为候选列表。
 func ScanRecognizedItems(scan *model.FridgeScan) ([]FridgeItemInput, error) {
 	if scan == nil || scan.RecognizedItems == "" || scan.RecognizedItems == "null" {
-		return nil, nil
+		return []FridgeItemInput{}, nil
 	}
 	var items []FridgeItemInput
 	if err := json.Unmarshal([]byte(scan.RecognizedItems), &items); err != nil {

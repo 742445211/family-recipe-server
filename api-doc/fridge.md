@@ -140,6 +140,26 @@
 | failed | 识别失败，见 error_msg |
 | confirmed | 已确认写入库存 |
 
+`recognized_items` 无识别结果时为 `[]`，不会是 `null`。
+
+---
+
+## POST /fridge/scans/:id/retry
+
+对卡在 `processing` 或 `failed` 的识别任务重新派发（需登录）。使用原 `task_id` 与 OSS 图片，不重新上传。
+
+**前置条件：** 树莓派 ImageWorker WebSocket 在线。
+
+**响应 data：** 更新后的 `FridgeScan`（`status=processing`）
+
+**错误：**
+
+| HTTP | 说明 |
+|------|------|
+| 400 | 任务不可重试（如已 `done` / `confirmed`） |
+| 404 | 扫描记录不存在 |
+| 503 | 图片识别服务离线 |
+
 ---
 
 ## POST /fridge/scans/:id/confirm
@@ -218,4 +238,4 @@
 
 ---
 
-变更记录：2026-06-12 初版
+变更记录：2026-06-12 初版；2026-06-16 补充 `/retry` 与空识别结果约定

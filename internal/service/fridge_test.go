@@ -110,6 +110,36 @@ func TestParseRecognizeDetailItemsAndLegacy(t *testing.T) {
 	if err != nil || len(items) != 2 || items[0].Name != "苹果" {
 		t.Fatalf("array=%+v err=%v", items, err)
 	}
+
+	items, err = ParseRecognizeDetail(json.RawMessage(`{}`))
+	if err != nil || items == nil || len(items) != 0 {
+		t.Fatalf("empty object=%+v err=%v", items, err)
+	}
+}
+
+func TestFridgeApplyRecognizeEmptyDetail(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
+	svc := NewFridgeService(db, &mockFridgeDispatcher{dispatched: true})
+
+	scan, err := svc.CreateScan(userID, familyID, "fridge/empty.jpg", "https://cdn/empty.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ApplyRecognizeResult(scan.ID, json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.GetScan(familyID, scan.ID)
+	if err != nil || got.Status != FridgeScanDone {
+		t.Fatalf("scan=%+v err=%v", got, err)
+	}
+	if got.RecognizedItems != "[]" {
+		t.Fatalf("recognized_items should be [], got %q", got.RecognizedItems)
+	}
+	items, err := ScanRecognizedItems(got)
+	if err != nil || items == nil || len(items) != 0 {
+		t.Fatalf("ScanRecognizedItems=%+v err=%v", items, err)
+	}
 }
 
 func TestFridgeApplyRecognizeAndConfirm(t *testing.T) {

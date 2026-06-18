@@ -53,9 +53,24 @@
 
 收藏列表（需登录）。
 
-**响应 data：** 收藏项数组，含 `recipe`。
+**Query：**
 
----
+| 参数 | 说明 |
+|------|------|
+| page | 页码，默认 1 |
+| page_size | 每页条数，默认 20，最大 50 |
+
+**响应 data：**
+
+```json
+{
+  "list": [ { "id", "recipe_id", "recipe": { ... } } ],
+  "total": 10,
+  "page": 1,
+  "page_size": 20,
+  "has_more": false
+}
+```
 
 ## POST /favorites/:id
 

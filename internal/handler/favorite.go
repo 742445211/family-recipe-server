@@ -101,24 +101,41 @@ func (h *FavoriteHandler) Remove(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok"})
 }
 
-// List 获取当前用户的收藏列表接口。
+// List 获取当前用户的收藏列表接口（分页）。
 //
 // 路由：GET /api/favorites（需认证）
 //
-// 功能：
-//   返回当前用户收藏的所有菜谱，附带菜谱详情，按收藏时间倒序排列。
+// 查询参数：
+//   - page: int (可选) 页码，默认 1
+//   - page_size: int (可选) 每页条数，默认 20，最大 50
 //
 // 响应：
-//   - 成功：{"code":0, "data":[{"id":1,"user_id":2,"recipe_id":5,"recipe":{...},...}]}
+//   - 成功：{"code":0, "data":{"list":[...],"total":10,"page":1,"page_size":20,"has_more":false}}
 func (h *FavoriteHandler) List(c *gin.Context) {
-	// 从 JWT 上下文中获取当前用户 ID
+	page, pageSize := pageParams(c)
 	userID := middleware.GetUserID(c)
 
-	var favs []model.Favorite
-	h.db.Where("user_id = ?", userID).
-		Preload("Recipe").        // 预加载菜谱信息，避免 N+1 查询
-		Order("created_at DESC"). // 按收藏时间倒序，最新收藏在前
-		Find(&favs)
+	query := h.db.Model(&model.Favorite{}).Where("user_id = ?", userID)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "查询失败"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "data": favs})
+	offset := (page - 1) * pageSize
+	var favs []model.Favorite
+	if err := query.
+		Preload("Recipe").
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&favs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "查询失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"data": pagePayload(favs, total, page, pageSize),
+	})
 }

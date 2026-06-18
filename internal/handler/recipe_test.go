@@ -59,8 +59,11 @@ func TestRecipeListPublicWithoutAuth(t *testing.T) {
 	}
 	var resp struct {
 		Data struct {
-			List  []model.Recipe `json:"list"`
-			Total int64          `json:"total"`
+			List     []model.Recipe `json:"list"`
+			Total    int64          `json:"total"`
+			HasMore  bool           `json:"has_more"`
+			Page     int            `json:"page"`
+			PageSize int            `json:"page_size"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -68,6 +71,53 @@ func TestRecipeListPublicWithoutAuth(t *testing.T) {
 	}
 	if resp.Data.Total != 1 || len(resp.Data.List) != 1 || resp.Data.List[0].Name != "外来公开菜谱" {
 		t.Fatalf("未登录应只返回公开菜谱: %+v", resp.Data)
+	}
+	if resp.Data.HasMore {
+		t.Fatalf("单条结果 has_more 应为 false")
+	}
+}
+
+func TestRecipeListPagination(t *testing.T) {
+	r, _, userID, familyID := setupRecipeRouter(t)
+	token, _ := jwtPkg.Generate(config.AppConfig.JWT.Secret, 24, userID, "oid", familyID)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, authRequest(http.MethodGet, "/api/recipes?page=1&page_size=1", token))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d body=%s", w.Code, w.Body.String())
+	}
+	var page1 struct {
+		Data struct {
+			List     []model.Recipe `json:"list"`
+			Total    int64          `json:"total"`
+			HasMore  bool           `json:"has_more"`
+			Page     int            `json:"page"`
+			PageSize int            `json:"page_size"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &page1); err != nil {
+		t.Fatal(err)
+	}
+	if page1.Data.Total != 2 || len(page1.Data.List) != 1 || !page1.Data.HasMore {
+		t.Fatalf("第一页分页异常: %+v", page1.Data)
+	}
+
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, authRequest(http.MethodGet, "/api/recipes?page=2&page_size=1", token))
+	if w.Code != http.StatusOK {
+		t.Fatalf("page2 status %d", w.Code)
+	}
+	var page2 struct {
+		Data struct {
+			List    []model.Recipe `json:"list"`
+			HasMore bool           `json:"has_more"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &page2); err != nil {
+		t.Fatal(err)
+	}
+	if len(page2.Data.List) != 1 || page2.Data.HasMore {
+		t.Fatalf("第二页分页异常: %+v", page2.Data)
 	}
 }
 

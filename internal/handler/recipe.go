@@ -225,9 +225,7 @@ func (h *RecipeHandler) Get(c *gin.Context) {
 //   - 成功：{"code":0, "data":{"list":[...],"total":100,"page":1,"page_size":20}}
 //   - 失败：{"code":500, "msg":"查询失败"}
 func (h *RecipeHandler) List(c *gin.Context) {
-	// 解析分页参数（带默认值）
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize := pageParams(c)
 
 	// 调用 service 层分页查询（含关键字和分类筛选）
 	recipes, total, err := h.svc.List(
@@ -241,15 +239,9 @@ func (h *RecipeHandler) List(c *gin.Context) {
 		return
 	}
 
-	// 返回分页结果
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
-		"data": gin.H{
-			"list":      recipes,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+		"data": pagePayload(recipes, total, page, pageSize),
 	})
 }
 

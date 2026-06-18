@@ -39,7 +39,8 @@
   "list": [ { "id", "name", "category", "cover_url", "creator", ... } ],
   "total": 100,
   "page": 1,
-  "page_size": 20
+  "page_size": 20,
+  "has_more": false
 }
 ```
 

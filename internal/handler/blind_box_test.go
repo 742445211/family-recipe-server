@@ -25,7 +25,8 @@ func setupBlindBoxHandlerTest(t *testing.T) (*gin.Engine, *gorm.DB, uint64, uint
 	testutil.EnsureAppConfig(t)
 	userID, familyID := testutil.SeedUserAndFamily(t, db)
 	mr, _ := miniredis.Run()
-	store := cache.NewRedisCacheFromClient(mr.Client())
+	store := cache.NewRedisCache(mr.Addr(), "", 0)
+	t.Cleanup(mr.Close)
 	enabled := true
 	config.AppConfig.BlindBox.Enabled = &enabled
 	config.AppConfig.BlindBox.RateLimit = config.BlindBoxRateLimitConfig{Enabled: false}

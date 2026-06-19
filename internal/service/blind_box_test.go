@@ -19,7 +19,8 @@ func setupBlindBoxTest(t *testing.T) (*BlindBoxService, *miniredis.Miniredis) {
 	if err != nil {
 		t.Fatalf("miniredis: %v", err)
 	}
-	store := cache.NewRedisCacheFromClient(mr.Client())
+	store := cache.NewRedisCache(mr.Addr(), "", 0)
+	t.Cleanup(mr.Close)
 	config.AppConfig = &config.Config{
 		BlindBox: config.BlindBoxConfig{
 			Enabled: boolPtr(true),

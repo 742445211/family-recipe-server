@@ -77,6 +77,7 @@ func main() {
 	if err := redisCache.Ping(context.Background()); err != nil {
 		log.Printf("警告: Redis 连接失败（AI推荐/天气缓存不可用）: %v", err)
 	}
+	blindBoxSvc := service.NewBlindBoxService(db, redisCache)
 	weatherSvc := service.NewWeatherService(redisCache, nil)
 	aiSvc := service.NewAIService()
 	rateLimitSvc := service.NewAIRateLimitService(redisCache)
@@ -133,11 +134,12 @@ func main() {
 			auth.POST("/recipes/:id/cooked", recipeH.Cooked) // 标记已烹饪
 
 			// 每日点菜
-			orderH := handler.NewOrderHandler(db, wsHub)
+			orderH := handler.NewOrderHandler(db, wsHub, blindBoxSvc)
 			auth.GET("/orders", orderH.List)         // 查看点菜列表
 			auth.POST("/orders", orderH.Add)         // 点一道菜
 			auth.DELETE("/orders/:id", orderH.Remove) // 取消点菜
 			auth.POST("/orders/share", orderH.Share) // 创建动态消息分享
+			auth.POST("/orders/blind-box/draw", orderH.DrawBlindBox) // 点菜盲盒抽取
 
 			// 厨师通知
 			notifyH := handler.NewNotificationHandler(db, wsHub)

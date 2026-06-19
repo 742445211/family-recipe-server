@@ -29,16 +29,17 @@ func today() string {
 }
 
 // OrderHandler 每日点菜处理器。
-// 底层调用 OrderService 处理业务逻辑。
 type OrderHandler struct {
-	svc         *service.OrderService
-	notifySvc   *service.NotificationService
+	svc       *service.OrderService
+	blindBox  *service.BlindBoxService
+	notifySvc *service.NotificationService
 }
 
 // NewOrderHandler 创建点菜处理器。
-func NewOrderHandler(db *gorm.DB, hub *service.WebSocketHub) *OrderHandler {
+func NewOrderHandler(db *gorm.DB, hub *service.WebSocketHub, blindBox *service.BlindBoxService) *OrderHandler {
 	return &OrderHandler{
 		svc:       service.NewOrderService(db),
+		blindBox:  blindBox,
 		notifySvc: service.NewNotificationService(db, hub),
 	}
 }

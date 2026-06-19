@@ -115,3 +115,10 @@ image_worker:
 
 fridge:
   enabled: true
+
+blind_box:
+  enabled: true
+  rate_limit:
+    enabled: true
+    max_requests: 30
+    window_hours: 3

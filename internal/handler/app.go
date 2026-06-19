@@ -23,10 +23,12 @@ func (h *AppHandler) Features(c *gin.Context) {
 	aiRecommend := false
 	catalogRecipe := false
 	fridge := true
+	blindBox := true
 	if config.AppConfig != nil {
 		aiRecommend = config.AppConfig.AIRecommendEnabled()
 		catalogRecipe = config.AppConfig.CatalogRecipeEnabled()
 		fridge = config.AppConfig.FridgeEnabled()
+		blindBox = config.AppConfig.BlindBoxEnabled()
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
@@ -35,6 +37,7 @@ func (h *AppHandler) Features(c *gin.Context) {
 			"ai_recommend":   aiRecommend,
 			"catalog_recipe": catalogRecipe,
 			"fridge":         fridge,
+			"blind_box":      blindBox,
 		},
 	})
 }

@@ -24,6 +24,7 @@ type Config struct {
 	Notification NotificationConfig `yaml:"notification"` // 厨师通知配置
 	ImageWorker  ImageWorkerConfig  `yaml:"image_worker"` // 树莓派图片处理网关
 	Fridge       FridgeConfig       `yaml:"fridge"`       // 冰箱食材功能
+	BlindBox     BlindBoxConfig     `yaml:"blind_box"`    // 点菜盲盒
 }
 
 // ServerConfig HTTP 服务器配置。
@@ -207,6 +208,19 @@ type FridgeConfig struct {
 	Enabled *bool `yaml:"enabled"`
 }
 
+// BlindBoxRateLimitConfig 盲盒抽取限流。
+type BlindBoxRateLimitConfig struct {
+	Enabled     bool `yaml:"enabled"`
+	MaxRequests int  `yaml:"max_requests"`
+	WindowHours int  `yaml:"window_hours"`
+}
+
+// BlindBoxConfig 点菜盲盒功能。
+type BlindBoxConfig struct {
+	Enabled   *bool                   `yaml:"enabled"`
+	RateLimit BlindBoxRateLimitConfig `yaml:"rate_limit"`
+}
+
 // FridgeEnabled 是否开放冰箱功能（/api/fridge/*）。
 func (c *Config) FridgeEnabled() bool {
 	if c == nil {
@@ -216,6 +230,17 @@ func (c *Config) FridgeEnabled() bool {
 		return true
 	}
 	return *c.Fridge.Enabled
+}
+
+// BlindBoxEnabled 是否开放点菜盲盒（/api/orders/blind-box/*）。
+func (c *Config) BlindBoxEnabled() bool {
+	if c == nil {
+		return true
+	}
+	if c.BlindBox.Enabled == nil {
+		return true
+	}
+	return *c.BlindBox.Enabled
 }
 
 // AIRecommendEnabled 是否开放 AI 推荐功能（前端入口与 /api/ai/* 接口）。
@@ -360,6 +385,7 @@ func Load(path string) error {
 	applyNotificationDefaults(AppConfig)
 	applyImageWorkerDefaults(AppConfig)
 	applyFridgeDefaults(AppConfig)
+	applyBlindBoxDefaults(AppConfig)
 	applyRedisWeatherAIDefaults(AppConfig)
 	return nil
 }
@@ -381,6 +407,20 @@ func applyFridgeDefaults(c *Config) {
 	if c.Fridge.Enabled == nil {
 		t := true
 		c.Fridge.Enabled = &t
+	}
+}
+
+func applyBlindBoxDefaults(c *Config) {
+	if c.BlindBox.Enabled == nil {
+		t := true
+		c.BlindBox.Enabled = &t
+	}
+	rl := &c.BlindBox.RateLimit
+	if rl.MaxRequests == 0 {
+		rl.MaxRequests = 30
+	}
+	if rl.WindowHours == 0 {
+		rl.WindowHours = 3
 	}
 }
 

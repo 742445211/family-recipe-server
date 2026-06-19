@@ -22,7 +22,7 @@ func setupBlindBoxHandlerTest(t *testing.T) (*gin.Engine, *gorm.DB, uint64, uint
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := testutil.SetupTestDB(t)
-	testutil.EnsureAppConfig(t)
+	testutil.EnsureAppConfig()
 	userID, familyID := testutil.SeedUserAndFamily(t, db)
 	mr, _ := miniredis.Run()
 	store := cache.NewRedisCache(mr.Addr(), "", 0)

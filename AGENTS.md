@@ -15,34 +15,17 @@
 main.go                        # 入口：配置、迁移、路由、WebSocket、worker
 config/
   config.go                    # 配置结构体与默认值
-  test/                        # config_test
 config.yaml                    # 运行时配置（含 notification 块）
 migrations/                    # SQL 迁移（001 初始化，002 通知表）
 api-doc/                       # HTTP 接口文档（与 main.go / handler 同步维护）
 internal/
   handler/                     # Gin HTTP 处理器
-    test/                      # handler_test
   service/                     # 业务逻辑
-    test/                      # service_test
-    test_support.go            # 供 test/ 访问的内部符号（*ForTest）
-    notifier/                  # 通知通道
-      test/
-      test_support.go
+    notifier/                  # 通知通道：websocket/wechat_subscribe/wecom_workbench/server_chan/bark/ntfy
     wechattoken/               # 微信/企微 access_token 缓存
-      test/
-      test_support.go
-  cache/
-    test/
-  middleware/                  # JWT 鉴权 AuthRequired
-    test/
-  testutil/                    # 测试辅助（非测试文件，供各 test 包 import）
-    test/
   model/                       # GORM 实体
-pkg/
-  jwt/
-    test/
-  dateutil/
-    test/
+  middleware/                  # JWT 鉴权 AuthRequired
+pkg/jwt/                       # JWT 签发与解析
 ```
 
 ## 分层约定
@@ -158,25 +141,16 @@ pkg/
 
 ### 测试位置
 
-单元测试统一放在各包目录下的 **`test/` 子目录**，使用外部测试包（`package xxx_test`），通过 import 父包调用导出 API。
-
-| 包 | 测试目录 | 测试包名 |
-| --- | --- | --- |
-| 业务逻辑 | `internal/service/test/` | `service_test` |
-| HTTP 处理器 | `internal/handler/test/` | `handler_test` |
-| 中间件 | `internal/middleware/test/` | `middleware_test` |
-| 配置 | `config/test/` | `config_test` |
-| 缓存 | `internal/cache/test/` | `cache_test` |
-| 工具库 | `pkg/*/test/` | `jwt_test`、`dateutil_test` 等 |
-| 通知通道 | `internal/service/notifier/test/` | `notifier_test` |
-| 微信 token | `internal/service/wechattoken/test/` | `wechattoken_test` |
-| 测试辅助 | `internal/testutil/test/` | `testutil_test` |
-
-**约定**：
-
-- 新增测试文件放在对应包的 `test/` 下，包名必须为 `\<父包名\>_test`（如 `internal/service/test/order_test.go` → `package service_test`）。
-- 禁止在父包目录保留 `*_test.go`（`export_test.go` 除外，但本仓库白盒辅助统一用 `test_support.go`）。
-- 外部测试包无法访问未导出符号；若必须测试内部逻辑，在父包添加 `test_support.go`，提供 `*ForTest` 辅助函数（见 `internal/service/test_support.go`）。
+| 包 | 测试文件 |
+| --- | --- |
+| 业务逻辑 | `internal/service/*_test.go` |
+| HTTP 处理器 | `internal/handler/*_test.go` |
+| 中间件 | `internal/middleware/*_test.go` |
+| 配置 | `config/*_test.go` |
+| 工具库 | `pkg/**/*_test.go` |
+| 通知通道 | `internal/service/notifier/*_test.go` |
+| 微信 token | `internal/service/wechattoken/*_test.go` |
+| 测试辅助 | `internal/testutil/`（非 `*_test.go`，仅供测试包 import） |
 
 ### 运行命令
 
@@ -184,7 +158,7 @@ pkg/
 go mod tidy
 GOTOOLCHAIN=go1.24.0 CGO_ENABLED=1 go build .
 # 快速（无 CGO 依赖的包）：
-GOTOOLCHAIN=go1.24.0 go test ./internal/service/notifier/test/... ./pkg/.../test/... ./config/test/... ./internal/middleware/test/... -count=1
+GOTOOLCHAIN=go1.24.0 go test ./internal/service/notifier/... ./pkg/... ./config/... ./internal/middleware/... -count=1
 # Linux 全量（含 SQLite 内存库集成测试，需 CGO）：
 GOTOOLCHAIN=go1.24.0 CGO_ENABLED=1 go test ./... -count=1
 ```

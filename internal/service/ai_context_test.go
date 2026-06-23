@@ -113,7 +113,7 @@ func TestAIContextServiceBuild(t *testing.T) {
 	os := NewOrderService(db)
 	r1 := &model.Recipe{Name: "  番茄炒蛋  ", FamilyID: familyID, CreatorID: userID, Ingredients: `[]`, Steps: `[]`}
 	db.Create(r1)
-	_, _ = os.Add(familyID, r1.ID, "dinner", userID, "2026-06-08", "", 1)
+	_, _ = os.Add(familyID, r1.ID, "dinner", userID, time.Now().Format("2006-01-02"), "", 1)
 
 	mr, err := miniredis.Run()
 	if err != nil {

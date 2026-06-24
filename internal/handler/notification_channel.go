@@ -1,3 +1,6 @@
+// Package handler - 用户通知通道配置 HTTP 接口。
+//
+// CRUD /api/notification-channels；secret 类字段响应中经 masked_target 脱敏。
 package handler
 
 import (

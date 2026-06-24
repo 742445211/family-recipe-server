@@ -1,3 +1,6 @@
+// Package handler - 全局菜谱库 HTTP 接口。
+//
+// lookup 查库或 AI 生成、单条详情、use 递增引用次数；功能开关 ai.catalog_enabled。
 package handler
 
 import (

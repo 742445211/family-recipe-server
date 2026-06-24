@@ -1,3 +1,4 @@
+// Package notifier - WebSocket 在线推送通道。
 package notifier
 
 import (

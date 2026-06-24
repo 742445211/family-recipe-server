@@ -1,3 +1,6 @@
+// Package wechattoken - 企业微信 API 客户端（access_token + 成员查询）。
+//
+// WecomToken 缓存 corp access_token；GetUseridByMobile 将手机号解析为企微 UserID。
 package wechattoken
 
 import (

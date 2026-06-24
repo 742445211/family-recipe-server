@@ -1,3 +1,4 @@
+// 全局菜谱库数据模型：catalog_recipes 表，同一 name_key 可有多条 variant（不同做法）。
 package model
 
 import "time"

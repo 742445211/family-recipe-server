@@ -1,3 +1,7 @@
+// Package service - 用户通知通道配置。
+//
+// 管理 notification_channels 表 CRUD；企微通道支持手机号自动解析为 UserID。
+// GetEnabledTargets 供 NotificationService 调度各通道时使用。
 package service
 
 import (

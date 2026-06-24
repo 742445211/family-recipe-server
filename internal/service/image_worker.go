@@ -1,3 +1,7 @@
+// Package service - 树莓派图片处理网关调度。
+//
+// 经 ImageWorkerHub WebSocket 派发 compress（菜谱封面压缩）与 recognize（冰箱识别）任务，
+// 接收网关回传结果并回调 FridgeRecognizer 或更新菜谱封面。
 package service
 
 import (
@@ -32,6 +36,7 @@ func NewImageWorkerService(db *gorm.DB, hub *ImageWorkerHub) *ImageWorkerService
 	return s
 }
 
+// SetFridgeRecognizer 注入冰箱识别结果处理器（避免 service 包循环依赖）。
 func (s *ImageWorkerService) SetFridgeRecognizer(fr FridgeRecognizer) {
 	s.fridge = fr
 }

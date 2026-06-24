@@ -1,3 +1,6 @@
+// Package cache - Redis 缓存抽象与实现。
+//
+// Store 接口便于单测注入 mock；用于 AI 推荐草稿、天气快照、限流计数等。
 package cache
 
 import (

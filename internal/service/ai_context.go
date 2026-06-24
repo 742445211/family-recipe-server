@@ -1,3 +1,7 @@
+// Package service - AI 推荐上下文组装。
+//
+// 聚合家庭菜谱、近期点菜、冰箱库存、天气等信息，供 LLM 生成个性化推荐；
+// InferMealSlot 按当前时刻推断应推荐的餐次（含宵夜时段）。
 package service
 
 import (

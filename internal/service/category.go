@@ -1,3 +1,7 @@
+// Package service - 家庭菜谱分类维护。
+//
+// 分类与 recipes.category 字段对应；Ensure 在创建/更新菜谱时自动补全，
+// SyncFromRecipes / SyncAllFamilies 从已有菜谱反向同步分类表。
 package service
 
 import (

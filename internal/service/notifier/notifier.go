@@ -1,3 +1,6 @@
+// Package notifier - 点菜通知多通道抽象与公共工具。
+//
+// Notifier 接口统一各通道 Send 行为；NotificationMessage 为跨通道消息体。
 package notifier
 
 import (

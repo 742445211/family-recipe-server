@@ -1,3 +1,6 @@
+// Package handler - 点菜盲盒 HTTP 接口（order.go 扩展）。
+//
+// POST /api/orders/blind-box/draw 从家庭菜谱池随机抽取，受 blind_box 功能开关与 Redis 限流约束。
 package handler
 
 import (

@@ -1,3 +1,6 @@
+// Package service - 天气快照（Open-Meteo）。
+//
+// 默认成都坐标，结果 Redis 缓存 3 小时；供 AI 推荐上下文与公开 GET /api/weather 使用。
 package service
 
 import (

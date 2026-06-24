@@ -1,3 +1,6 @@
+// Package handler - 菜谱分类 HTTP 接口。
+//
+// GET /api/categories 返回当前家庭分类；GET /api/categories/public 返回公开菜谱分类（无需登录）。
 package handler
 
 import (

@@ -1,3 +1,6 @@
+// Package service - 点菜盲盒。
+//
+// 从家庭可用菜谱池中随机抽取一道（可排除已点/指定 ID），Redis 限流控制抽取频率。
 package service
 
 import (

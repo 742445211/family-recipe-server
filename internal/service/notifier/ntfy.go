@@ -1,3 +1,4 @@
+// Package notifier - ntfy 自托管推送通道。
 package notifier
 
 import (

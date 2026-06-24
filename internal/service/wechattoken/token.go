@@ -1,3 +1,6 @@
+// Package wechattoken - 微信/企微 access_token 内存缓存。
+//
+// 避免频繁请求 token 接口；MiniProgramToken 供订阅消息，WecomToken 供企微工作台通知。
 package wechattoken
 
 import (

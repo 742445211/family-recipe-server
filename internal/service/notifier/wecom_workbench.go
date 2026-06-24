@@ -1,3 +1,4 @@
+// Package notifier - 企业微信工作台图文卡片通道。
 package notifier
 
 import (

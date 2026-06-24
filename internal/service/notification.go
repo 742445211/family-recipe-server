@@ -1,3 +1,8 @@
+// Package service - 厨师点菜通知服务。
+//
+// 点菜成功后：先写入 notifications 表（强一致），再异步调度各通知通道
+// （WebSocket / 微信订阅 / 企微 / Server酱 / Bark / ntfy），投递记录写入 notification_deliveries。
+// 离线 WebSocket 用户上线时通过 FlushUnreadWebSocket 补推；失败投递由 RetryWorker 重试。
 package service
 
 import (
@@ -132,6 +137,7 @@ func (s *NotificationService) NotifyOrderCreated(orderID uint64) error {
 }
 
 func (s *NotificationService) ensureNotification(order model.DailyOrder, receiverID uint64, title, content string) (*model.Notification, error) {
+	// 同一 order + 厨师 仅创建一条通知，避免重复点菜或重试时重复落库
 	var existing model.Notification
 	err := s.db.Where("order_id = ? AND receiver_user_id = ?", order.ID, receiverID).First(&existing).Error
 	if err == nil {
@@ -155,6 +161,8 @@ func (s *NotificationService) ensureNotification(order model.DailyOrder, receive
 	return &n, nil
 }
 
+// shouldDispatchChannel 判断是否向某通道发起投递。
+// WebSocket 始终尝试（在线即推）；微信订阅在无用户通道配置时仍可用 OpenID 兜底。
 func shouldDispatchChannel(ch string, n notifier.Notifier, targets map[string]notifierTarget, msg notifier.NotificationMessage) bool {
 	if !n.Enabled() {
 		return false

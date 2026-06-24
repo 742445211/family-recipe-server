@@ -1,3 +1,6 @@
+// Package service - 树莓派 ImageWorker 网关 WebSocket Hub。
+//
+// 单连接模型：同一时刻仅维护一条到树莓派的 WebSocket，用于收发图片处理任务与结果。
 package service
 
 import (
@@ -30,6 +33,7 @@ func NewImageWorkerHub(onResult func([]byte)) *ImageWorkerHub {
 	return &ImageWorkerHub{onResult: onResult}
 }
 
+// IsConnected 网关是否在线（有活跃 WebSocket 连接）。
 func (h *ImageWorkerHub) IsConnected() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

@@ -1,3 +1,7 @@
+// Package service - 用户 WebSocket 连接 Hub。
+//
+// 管理小程序端的在线连接（JWT query token 鉴权），支持同一用户多端并存；
+// 用于通知实时推送，连接建立时可触发 onConnect 回调补推离线消息。
 package service
 
 import (

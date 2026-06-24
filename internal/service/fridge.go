@@ -1,3 +1,7 @@
+// Package service - 冰箱食材库存与拍照识别。
+//
+// 支持手动录入与拍照识别两种来源；识别任务经 ImageWorker 派发给树莓派网关，
+// 用户确认识别结果后批量写入 fridge_items。网关离线时 scan 置 failed。
 package service
 
 import (
@@ -57,6 +61,7 @@ func NewFridgeService(db *gorm.DB, disp FridgeImageDispatcher) *FridgeService {
 	return &FridgeService{db: db, disp: disp}
 }
 
+// ListItems 按保质期升序排列，无保质期的排在最后。
 func (s *FridgeService) ListItems(familyID uint64) ([]model.FridgeItem, error) {
 	var items []model.FridgeItem
 	err := s.db.Where("family_id = ?", familyID).

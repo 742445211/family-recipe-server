@@ -1,3 +1,4 @@
+// Package notifier - Server酱（方糖）推送通道。
 package notifier
 
 import (

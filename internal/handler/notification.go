@@ -1,3 +1,6 @@
+// Package handler - 厨师通知 HTTP 接口。
+//
+// 提供未读通知列表与标记已读；ListUnread 附加 order_date / meal_type 便于前端跳转点菜页。
 package handler
 
 import (

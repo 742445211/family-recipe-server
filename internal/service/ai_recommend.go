@@ -1,3 +1,7 @@
+// Package service - AI 智能推荐（结构化 + Redis 草稿）。
+//
+// 聚合家庭菜谱、点菜历史、天气等上下文调用 LLM，批次结果写入 Redis；
+// 用户可从草稿 import-recipe 入库或 add-order 直接点菜。recommend 与 catalog 限流独立计数。
 package service
 
 import (

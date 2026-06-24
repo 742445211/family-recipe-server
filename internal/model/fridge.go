@@ -1,3 +1,4 @@
+// 冰箱食材数据模型：fridge_items（家庭库存）、fridge_scans（拍照识别任务）。
 package model
 
 import (

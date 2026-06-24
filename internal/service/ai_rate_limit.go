@@ -1,3 +1,7 @@
+// Package service - AI 接口限流。
+//
+// 按 user_id + 场景（recommend / catalog）在 Redis 滑动窗口计数，
+// 窗口与上限见 config.yaml ai.rate_limit.*。
 package service
 
 import (

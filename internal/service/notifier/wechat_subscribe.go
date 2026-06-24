@@ -1,3 +1,4 @@
+// Package notifier - 微信小程序订阅消息通道。
 package notifier
 
 import (

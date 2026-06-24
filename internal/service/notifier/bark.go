@@ -1,3 +1,4 @@
+// Package notifier - Bark iOS 推送通道。
 package notifier
 
 import (

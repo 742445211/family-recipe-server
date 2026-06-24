@@ -1,3 +1,7 @@
+// Package service - 全局菜谱库（catalog_recipes）。
+//
+// 按 name_key 精确检索已有做法；无记录或 new_variant 时调用 DeepSeek 生成并入库。
+// 同一菜名可有多条 variant_label；content_hash 用于内容去重。
 package service
 
 import (
@@ -54,7 +58,7 @@ func NewCatalogRecipeService(db *gorm.DB, ai *AIService, rateLimit *AIRateLimitS
 	return &CatalogRecipeService{db: db, ai: ai, rateLimit: rateLimit}
 }
 
-// NormalizeNameKey 规范化菜名用于精确检索。
+// NormalizeNameKey 规范化菜名：去空格、英文字母转小写，用于 name_key 精确检索。
 func NormalizeNameKey(name string) string {
 	name = strings.TrimSpace(name)
 	var b strings.Builder

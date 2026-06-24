@@ -1,3 +1,6 @@
+// Package handler - 分页参数解析工具。
+//
+// 统一解析 query page / page_size，默认值 1 / 20，上限 50。
 package handler
 
 import (

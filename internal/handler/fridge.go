@@ -1,3 +1,6 @@
+// Package handler - 冰箱食材 HTTP 接口。
+//
+// 路由前缀 /api/fridge/*；功能开关 fridge.enabled，未开启时返回 403。
 package handler
 
 import (

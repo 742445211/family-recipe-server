@@ -1,3 +1,6 @@
+// Package dateutil - 日期字符串规范化工具。
+//
+// FormatYMD 将多种常见格式统一为 YYYY-MM-DD，供点菜、通知、AI 上下文等模块复用。
 package dateutil
 
 import (

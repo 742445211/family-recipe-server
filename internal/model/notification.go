@@ -1,3 +1,4 @@
+// 通知相关数据模型：notifications、notification_deliveries、notification_channels 表及通道常量。
 package model
 
 import (

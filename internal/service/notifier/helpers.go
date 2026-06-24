@@ -1,3 +1,4 @@
+// Package notifier - 通知通道公共辅助函数（食材格式化、HTTP 响应读取等）。
 package notifier
 
 import (

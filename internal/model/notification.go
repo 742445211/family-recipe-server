@@ -29,8 +29,8 @@ const (
 type Notification struct {
 	ID             uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
 	FamilyID       uint64         `gorm:"not null;index:idx_family_created" json:"family_id"`
-	ReceiverUserID uint64         `gorm:"not null;index:idx_receiver_status" json:"receiver_user_id"`
-	OrderID        uint64         `gorm:"not null;index:idx_order_receiver" json:"order_id"`
+	ReceiverUserID uint64         `gorm:"not null;uniqueIndex:uk_order_receiver;index:idx_receiver_status" json:"receiver_user_id"`
+	OrderID        uint64         `gorm:"not null;uniqueIndex:uk_order_receiver;index:idx_order_receiver" json:"order_id"`
 	Type           string         `gorm:"size:50;not null" json:"type"`
 	Title          string         `gorm:"size:100;not null" json:"title"`
 	Content        string         `gorm:"size:500;not null" json:"content"`

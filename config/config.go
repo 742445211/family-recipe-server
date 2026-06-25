@@ -29,8 +29,9 @@ type Config struct {
 
 // ServerConfig HTTP 服务器配置。
 type ServerConfig struct {
-	Port int    `yaml:"port"` // 监听端口，默认 8080
-	Mode string `yaml:"mode"` // Gin 运行模式 (debug/release/test)
+	Port           int      `yaml:"port"`            // 监听端口，默认 8080
+	Mode           string   `yaml:"mode"`            // Gin 运行模式 (debug/release/test)
+	AllowedOrigins []string `yaml:"allowed_origins"` // WebSocket 允许的 Origin 列表
 }
 
 // MySQLConfig 数据库连接配置。
@@ -387,6 +388,20 @@ func Load(path string) error {
 	applyFridgeDefaults(AppConfig)
 	applyBlindBoxDefaults(AppConfig)
 	applyRedisWeatherAIDefaults(AppConfig)
+	return Validate(AppConfig)
+}
+
+// Validate 校验关键配置项。
+func Validate(c *Config) error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if strings.TrimSpace(c.JWT.Secret) == "" {
+		return fmt.Errorf("jwt.secret must not be empty")
+	}
+	if c.JWT.ExpireHours <= 0 {
+		c.JWT.ExpireHours = 720
+	}
 	return nil
 }
 

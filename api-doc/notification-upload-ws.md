@@ -52,18 +52,16 @@
 
 ## POST /upload
 
-上传图片（需登录）。
+上传图片（需登录）。支持 jpg/jpeg/png/webp/gif，最大 10MB。
 
-**请求：** `multipart/form-data`，字段名 `file`
+**请求：** `multipart/form-data`
 
-**响应 data：**
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| file | file | 是 | 图片文件 |
+| recipe_id | uint64 | 否 | 关联本家庭菜谱 ID（压缩完成后更新封面） |
 
-```json
-{
-  "key": "recipe/1730000000123456789.jpg",
-  "url": "https://cdn.example.com/..."
-}
-```
+**错误：** 400 格式/大小不合法；菜谱不存在或非本家庭
 
 ---
 
@@ -71,7 +69,9 @@
 
 WebSocket 厨师通知（非 REST JSON）。
 
-**连接：** `wss://www.zzzjc.xin/api/ws?token=<JWT>`
+**鉴权：** query `token=<JWT>` 或 Header `Authorization: Bearer <JWT>`
+
+**Origin：** 须匹配请求 Host 或 `server.allowed_origins` 配置
 
 - 路径可由 `notification.websocket.path` 配置，默认 `/api/ws`
 - Nginx 需配置 WebSocket Upgrade
@@ -85,4 +85,6 @@ WebSocket 厨师通知（非 REST JSON）。
 
 ---
 
-变更记录：2026-06-12 初版
+变更记录：
+- 2026-06-24 上传校验格式/大小与 recipe_id 归属；WebSocket 支持 Bearer 鉴权与 Origin 限制
+- 2026-06-12 初版

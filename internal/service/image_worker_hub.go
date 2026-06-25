@@ -18,7 +18,23 @@ import (
 )
 
 var imageWorkerUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		if strings.Contains(origin, r.Host) {
+			return true
+		}
+		if config.AppConfig != nil {
+			for _, allowed := range config.AppConfig.Server.AllowedOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+		}
+		return false
+	},
 }
 
 // ImageWorkerHub 管理树莓派图片处理网关 WebSocket 连接。

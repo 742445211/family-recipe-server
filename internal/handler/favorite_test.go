@@ -65,9 +65,10 @@ func TestFavoriteAddListRemove(t *testing.T) {
 
 func TestFavoriteRequiresAuthContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := NewFavoriteHandler(testutil.SetupTestDB(t))
+	db := testutil.SetupTestDB(t)
+	h := NewFavoriteHandler(db)
 	r := gin.New()
-	r.Use(middleware.AuthRequired())
+	r.Use(middleware.AuthRequired(db))
 	r.GET("/api/favorites", h.List)
 
 	token, _ := jwtPkg.Generate("test-secret", 1, 1, "oid", 0)

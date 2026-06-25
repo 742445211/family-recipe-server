@@ -38,7 +38,7 @@ func setupRecipeRouter(t *testing.T) (*gin.Engine, *RecipeHandler, uint64, uint6
 
 	h := NewRecipeHandler(db)
 	r := gin.New()
-	pub := r.Group("/api").Use(middleware.OptionalAuth())
+	pub := r.Group("/api").Use(middleware.OptionalAuth(db))
 	pub.GET("/recipes", h.List)
 	pub.GET("/recipes/:id", h.Get)
 	return r, h, userID, familyID

@@ -156,6 +156,10 @@ func (s *NotificationService) ensureNotification(order model.DailyOrder, receive
 		Status:         model.NotificationStatusUnread,
 	}
 	if err := s.db.Create(&n).Error; err != nil {
+		// 并发下可能触发 uk_order_receiver，回读已有记录
+		if err2 := s.db.Where("order_id = ? AND receiver_user_id = ?", order.ID, receiverID).First(&existing).Error; err2 == nil {
+			return &existing, nil
+		}
 		return nil, err
 	}
 	return &n, nil

@@ -52,7 +52,7 @@ func TestOrderAddAndList(t *testing.T) {
 	}
 
 	// Remove
-	if err := svc.Remove(order.ID, userID); err != nil {
+	if err := svc.Remove(order.ID, familyID, userID); err != nil {
 		t.Fatalf("取消点菜失败: %v", err)
 	}
 	orders, _ = svc.GetByDateAndMeal(familyID, "2026-05-01", "")
@@ -61,7 +61,7 @@ func TestOrderAddAndList(t *testing.T) {
 	}
 
 	// 不能删除别人的点菜
-	if err := svc.Remove(orders[0].ID, 999); err == nil {
+	if err := svc.Remove(orders[0].ID, familyID, 999); err == nil {
 		t.Fatal("删除他人点菜应失败")
 	}
 }

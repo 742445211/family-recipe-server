@@ -1,7 +1,3 @@
-// Package handler 提供 HTTP 请求处理器（Gin handlers）。
-//
-// 本文件 (upload.go) 负责文件上传相关接口：
-//   - 上传图片文件（存储到 OSS/本地，返回访问 URL）
 package handler
 
 import (
@@ -9,25 +5,23 @@ import (
 	"strconv"
 
 	"recipe-server/internal/middleware"
+	"recipe-server/internal/model"
 	"recipe-server/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // UploadHandler 文件上传处理器。
 type UploadHandler struct {
+	DB          *gorm.DB
 	ImageWorker *service.ImageWorkerService
 }
 
 // Upload 上传图片文件接口。
-//
-// 路由：POST /api/upload（需认证）
-//
-// 表单字段:
-//   - file: 图片文件
-//   - recipe_id: 可选，关联菜谱 ID（用于压缩后 DB key 同步）
 func (h *UploadHandler) Upload(c *gin.Context) {
-	_ = middleware.GetUserID(c)
+	userID := middleware.GetUserID(c)
+	familyID := middleware.GetFamilyID(c)
 
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
@@ -38,23 +32,37 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 
 	key, url, err := service.SaveImage(file, header)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
 		return
 	}
 
 	var recipeID uint64
 	if raw := c.PostForm("recipe_id"); raw != "" {
-		if id, err := strconv.ParseUint(raw, 10, 64); err == nil {
-			recipeID = id
+		id, parseErr := strconv.ParseUint(raw, 10, 64)
+		if parseErr != nil || id == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的菜谱 ID"})
+			return
 		}
+		if familyID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请先加入家庭"})
+			return
+		}
+		var recipe model.Recipe
+		q := h.DB.Where("id = ? AND family_id = ?", id, familyID)
+		if err := q.First(&recipe).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "菜谱不存在或无权操作"})
+			return
+		}
+		recipeID = id
 	}
 
 	if h.ImageWorker != nil {
-		h.ImageWorker.DispatchCompress(key, url, recipeID)
+		h.ImageWorker.DispatchCompress(key, url, recipeID, familyID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": gin.H{
 		"key": key,
 		"url": url,
 	}})
+	_ = userID
 }

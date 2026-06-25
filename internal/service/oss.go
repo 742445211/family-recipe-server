@@ -18,12 +18,34 @@ import (
 	"io"
 	"mime/multipart"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"recipe-server/config"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
+
+const maxUploadBytes = 10 << 20 // 10MB
+
+var allowedUploadExts = map[string]struct{}{
+	".jpg": {}, ".jpeg": {}, ".png": {}, ".webp": {}, ".gif": {},
+}
+
+// ValidateUploadFile 校验上传文件大小与扩展名。
+func ValidateUploadFile(header *multipart.FileHeader) error {
+	if header.Size <= 0 {
+		return fmt.Errorf("文件为空")
+	}
+	if header.Size > maxUploadBytes {
+		return fmt.Errorf("文件过大，最大 10MB")
+	}
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if _, ok := allowedUploadExts[ext]; !ok {
+		return fmt.Errorf("不支持的图片格式")
+	}
+	return nil
+}
 
 // SaveImage 上传图片到阿里云 OSS，并返回存储 key 和可访问的完整 URL。
 //
@@ -40,11 +62,10 @@ import (
 //   - 文件扩展名从原始文件名提取，若无扩展名则默认使用 .jpg
 //   - key 使用纳秒级时间戳保证唯一性，避免同名文件覆盖
 func SaveImage(file multipart.File, header *multipart.FileHeader) (string, string, error) {
-	// 提取文件扩展名（含点号，如 ".jpg"）
-	ext := filepath.Ext(header.Filename)
-	if ext == "" {
-		ext = ".jpg" // 默认使用 JPEG 格式
+	if err := ValidateUploadFile(header); err != nil {
+		return "", "", err
 	}
+	ext := strings.ToLower(filepath.Ext(header.Filename))
 
 	// 生成唯一 OSS key：recipe/{时间戳纳秒}{扩展名}
 	key := fmt.Sprintf("recipe/%d%s", time.Now().UnixNano(), ext)

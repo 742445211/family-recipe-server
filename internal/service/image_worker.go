@@ -41,7 +41,7 @@ func (s *ImageWorkerService) SetFridgeRecognizer(fr FridgeRecognizer) {
 	s.fridge = fr
 }
 
-func (s *ImageWorkerService) DispatchCompress(ossKey, ossURL string, recipeID uint64) {
+func (s *ImageWorkerService) DispatchCompress(ossKey, ossURL string, recipeID, familyID uint64) {
 	if s.hub == nil || !s.hub.IsConnected() {
 		log.Printf("[ImageWorker] skip compress (offline): %s", ossKey)
 		return
@@ -54,7 +54,11 @@ func (s *ImageWorkerService) DispatchCompress(ossKey, ossURL string, recipeID ui
 		"oss_url": ossURL,
 	}
 	if recipeID > 0 {
-		task["meta"] = map[string]any{"recipe_id": recipeID}
+		meta := map[string]any{"recipe_id": recipeID}
+		if familyID > 0 {
+			meta["family_id"] = familyID
+		}
+		task["meta"] = meta
 	}
 	if !s.hub.SendTask(task) {
 		log.Printf("[ImageWorker] failed to dispatch compress: %s", ossKey)
@@ -111,6 +115,7 @@ type taskMeta struct {
 	Scope    string `json:"scope"`
 	ScanID   uint64 `json:"scan_id"`
 	RecipeID uint64 `json:"recipe_id"`
+	FamilyID uint64 `json:"family_id"`
 }
 
 func parseTaskMeta(raw json.RawMessage) taskMeta {
@@ -176,7 +181,7 @@ func (s *ImageWorkerService) handleTaskResult(data []byte) {
 	}
 	switch msg.Action {
 	case "compress":
-		s.handleCompressResult(msg.OssKey, meta.RecipeID, msg.Detail)
+		s.handleCompressResult(msg.OssKey, meta.RecipeID, meta.FamilyID, msg.Detail)
 	case "recognize":
 		if scanID > 0 {
 			s.handleFridgeRecognizeResult(scanID, msg.Detail)
@@ -205,7 +210,7 @@ func (s *ImageWorkerService) handleFridgeRecognizeResult(scanID uint64, detail j
 	}
 }
 
-func (s *ImageWorkerService) handleCompressResult(oldKey string, recipeID uint64, detail json.RawMessage) {
+func (s *ImageWorkerService) handleCompressResult(oldKey string, recipeID, familyID uint64, detail json.RawMessage) {
 	var d struct {
 		Skipped   bool   `json:"skipped"`
 		NewOssKey string `json:"new_oss_key"`
@@ -217,7 +222,7 @@ func (s *ImageWorkerService) handleCompressResult(oldKey string, recipeID uint64
 	if d.Skipped || d.NewOssKey == "" || d.NewOssKey == oldKey {
 		return
 	}
-	if err := s.updateRecipeImageKey(recipeID, oldKey, d.NewOssKey); err != nil {
+	if err := s.updateRecipeImageKey(recipeID, familyID, oldKey, d.NewOssKey); err != nil {
 		log.Printf("[ImageWorker] update image key: %v", err)
 	}
 }
@@ -245,7 +250,7 @@ func (s *ImageWorkerService) handleRecognizeResult(recipeID uint64, detail json.
 	}
 }
 
-func (s *ImageWorkerService) updateRecipeImageKey(recipeID uint64, oldKey, newKey string) error {
+func (s *ImageWorkerService) updateRecipeImageKey(recipeID, familyID uint64, oldKey, newKey string) error {
 	newURL, err := BuildObjectURL(newKey)
 	if err != nil {
 		return err
@@ -253,6 +258,9 @@ func (s *ImageWorkerService) updateRecipeImageKey(recipeID uint64, oldKey, newKe
 	q := s.db.Model(&model.Recipe{})
 	if recipeID > 0 {
 		q = q.Where("id = ?", recipeID)
+		if familyID > 0 {
+			q = q.Where("family_id = ?", familyID)
+		}
 	} else {
 		q = q.Where("image_key = ?", oldKey)
 	}

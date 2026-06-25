@@ -16,12 +16,35 @@ package service
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"recipe-server/internal/model"
 
 	"gorm.io/gorm"
 )
+
+var (
+	ErrDuplicateOrder  = errors.New("该餐次已点过这道菜")
+	ErrInvalidMealType = errors.New("无效的餐次类型")
+)
+
+var validMealTypes = map[string]struct{}{
+	"breakfast": {},
+	"lunch":     {},
+	"dinner":    {},
+}
+
+func normalizeMealTypeInput(mealType string) (string, error) {
+	mealType = strings.TrimSpace(mealType)
+	if mealType == "" {
+		mealType = "dinner"
+	}
+	if _, ok := validMealTypes[mealType]; !ok {
+		return "", ErrInvalidMealType
+	}
+	return mealType, nil
+}
 
 // OrderService 每日点菜服务，封装 DailyOrder 的数据库操作。
 // 支持按日期 + 餐次维度的点菜增删查，以及授权管理（仅点菜人可删除）。
@@ -79,9 +102,13 @@ func (s *OrderService) DB() *gorm.DB {
 //   - 去重检查：同一家庭同日期同餐次不允许点同一道菜（软删除的记录不计入重复判断）
 //   - 创建后立即预加载关联数据（Recipe、Adder），以便返回完整的点菜信息给前端
 func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID uint64, date, note string, quantity int) (*model.DailyOrder, error) {
-	// 数量默认值处理
 	if quantity <= 0 {
 		quantity = 1
+	}
+	var err error
+	mealType, err = normalizeMealTypeInput(mealType)
+	if err != nil {
+		return nil, err
 	}
 
 	var recipe model.Recipe
@@ -90,18 +117,6 @@ func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID ui
 		return nil, ErrRecipeNotInFamily
 	}
 
-	// 去重校验：同日期 + 同餐次 + 同菜谱不允许重复点菜
-	// GORM 软删除模型下的 Count 自动滤除 deleted_at IS NOT NULL 的记录
-	var count int64
-	s.db.Model(&model.DailyOrder{}).
-		Where("family_id = ? AND date = ? AND meal_type = ? AND recipe_id = ?",
-			familyID, date, mealType, recipeID).
-		Count(&count)
-	if count > 0 {
-		return nil, errors.New("该餐次已点过这道菜")
-	}
-
-	// 构造 DailyOrder 记录
 	order := model.DailyOrder{
 		FamilyID: familyID,
 		Date:     date,
@@ -112,13 +127,29 @@ func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID ui
 		Note:     note,
 	}
 
-	// 插入数据库
-	if err := s.db.Create(&order).Error; err != nil {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&model.DailyOrder{}).
+			Where("family_id = ? AND date = ? AND meal_type = ? AND recipe_id = ?",
+				familyID, date, mealType, recipeID).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return ErrDuplicateOrder
+		}
+		return tx.Create(&order).Error
+	})
+	if err != nil {
+		if errors.Is(err, ErrDuplicateOrder) {
+			return nil, err
+		}
 		return nil, err
 	}
 
-	// 加载关联数据（菜谱详情 + 点菜人信息），方便前端直接展示
-	s.db.Preload("Recipe").Preload("Adder").First(&order, order.ID)
+	if err := s.db.Preload("Recipe").Preload("Adder").First(&order, order.ID).Error; err != nil {
+		return nil, err
+	}
 	return &order, nil
 }
 
@@ -143,8 +174,9 @@ func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID ui
 //   - GORM 的 Delete 对软删除模型执行的是 UPDATE 而非物理 DELETE
 //   - 通过 Where 条件中的 added_by = userID 保证仅点菜人可以删除
 //   - RowsAffected == 0 表示记录不存在或不属于该用户
-func (s *OrderService) Remove(orderID, userID uint64) error {
-	result := s.db.Where("id = ? AND added_by = ?", orderID, userID).Delete(&model.DailyOrder{})
+func (s *OrderService) Remove(orderID, familyID, userID uint64) error {
+	result := s.db.Where("id = ? AND family_id = ? AND added_by = ?", orderID, familyID, userID).
+		Delete(&model.DailyOrder{})
 	if result.RowsAffected == 0 {
 		return errors.New("无权删除或不存在")
 	}

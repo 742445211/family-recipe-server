@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +22,24 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		host := r.Host
+		if strings.Contains(origin, host) {
+			return true
+		}
+		if config.AppConfig != nil && config.AppConfig.Server.AllowedOrigins != nil {
+			for _, allowed := range config.AppConfig.Server.AllowedOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+		}
+		return false
+	},
 }
 
 // WebSocketHub 管理在线 WebSocket 连接。
@@ -108,6 +126,12 @@ func (h *WebSocketHub) PushToUser(userID uint64, payload map[string]any) bool {
 // HandleWebSocket Gin WebSocket 处理器。
 func (h *WebSocketHub) HandleWebSocket(c *gin.Context) {
 	token := c.Query("token")
+	if token == "" {
+		auth := c.GetHeader("Authorization")
+		if strings.HasPrefix(auth, "Bearer ") {
+			token = strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+		}
+	}
 	if token == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未登录"})
 		return

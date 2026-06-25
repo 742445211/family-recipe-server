@@ -9,12 +9,14 @@
 package handler
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"net/http"
 	"strconv"
 
 	"recipe-server/internal/middleware"
 	"recipe-server/internal/model"
+	"recipe-server/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -62,24 +64,37 @@ func (h *FamilyHandler) Create(c *gin.Context) {
 	// 3. 生成 6 位邀请码（大写字母+数字，排除易混淆的 0/O/1/I 等字符）
 	f.InviteCode = generateCode(6)
 
-	// 4. 创建家庭记录
-	if err := h.db.Create(&f).Error; err != nil {
+	// 4. 创建家庭记录与 owner 成员（事务）
+	if err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&f).Error; err != nil {
+			return err
+		}
+		member := model.FamilyMember{
+			FamilyID: f.ID,
+			UserID:   userID,
+			Role:     "owner",
+		}
+		if err := tx.Create(&member).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.User{}).Where("id = ?", userID).Update("current_family_id", f.ID).Error
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建失败"})
 		return
 	}
 
-	// 5. 创建者设为 owner 角色并加入家庭（写入 family_members 表）
-	member := model.FamilyMember{
-		FamilyID: f.ID,
-		UserID:   userID,
-		Role:     "owner",
+	token, err := service.IssueUserJWT(h.db, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "生成token失败"})
+		return
 	}
-	h.db.Create(&member)
 
-	// 6. 自动将新家庭设为当前用户的 current_family_id
-	h.db.Model(&model.User{}).Where("id = ?", userID).Update("current_family_id", f.ID)
-
-	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": f})
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": gin.H{
+		"id":          f.ID,
+		"name":        f.Name,
+		"invite_code": f.InviteCode,
+		"token":       token,
+	}})
 }
 
 // joinReq 加入家庭请求体。
@@ -135,7 +150,18 @@ func (h *FamilyHandler) Join(c *gin.Context) {
 	// 5. 设为当前家庭
 	h.db.Model(&model.User{}).Where("id = ?", userID).Update("current_family_id", family.ID)
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": family})
+	token, err := service.IssueUserJWT(h.db, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "生成token失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": gin.H{
+		"id":          family.ID,
+		"name":        family.Name,
+		"invite_code": family.InviteCode,
+		"token":       token,
+	}})
 }
 
 // List 获取当前用户加入的所有家庭列表接口。
@@ -178,14 +204,50 @@ func (h *FamilyHandler) List(c *gin.Context) {
 // 响应：
 //   - 成功：{"code":0, "data":[{"family_id":1,"user_id":2,"role":"owner","is_chef":false,"user":{...}}]}
 func (h *FamilyHandler) Members(c *gin.Context) {
-	// 从 URL 路径参数中解析家庭 ID
-	familyID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	familyID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || familyID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的家庭 ID"})
+		return
+	}
+	userID := middleware.GetUserID(c)
+	if err := service.AssertFamilyMember(h.db, userID, familyID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"code": 403, "msg": "无权查看该家庭成员"})
+		return
+	}
 
-	// 查询该家庭的所有成员，预加载 User 关联信息
 	var members []model.FamilyMember
 	h.db.Where("family_id = ?", familyID).Preload("User").Find(&members)
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "data": members})
+	type memberUserView struct {
+		ID        uint64 `json:"id"`
+		Nickname  string `json:"nickname"`
+		AvatarURL string `json:"avatar_url"`
+	}
+	type memberView struct {
+		FamilyID uint64          `json:"family_id"`
+		UserID   uint64          `json:"user_id"`
+		Role     string          `json:"role"`
+		IsChef   bool            `json:"is_chef"`
+		User     *memberUserView `json:"user,omitempty"`
+	}
+	out := make([]memberView, 0, len(members))
+	for _, m := range members {
+		mv := memberView{
+			FamilyID: m.FamilyID,
+			UserID:   m.UserID,
+			Role:     m.Role,
+			IsChef:   m.IsChef,
+		}
+		if m.User != nil {
+			mv.User = &memberUserView{
+				ID:        m.User.ID,
+				Nickname:  m.User.Nickname,
+				AvatarURL: m.User.AvatarURL,
+			}
+		}
+		out = append(out, mv)
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "data": out})
 }
 
 // ToggleChef 切换当前用户在当前家庭的厨师身份接口。
@@ -231,12 +293,16 @@ func (h *FamilyHandler) ToggleChef(c *gin.Context) {
 // 排除易混淆字符：0（数字零）、O（大写字母O）、1（数字一）、I（大写字母I）等。
 const codeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-// generateCode 生成指定长度的随机邀请码。
-// 从 codeChars 字符集中随机选择 n 个字符组成邀请码。
+// generateCode 生成指定长度的随机邀请码（crypto/rand）。
 func generateCode(n int) string {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = codeChars[rand.Intn(len(codeChars))]
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(codeChars))))
+		if err != nil {
+			b[i] = codeChars[0]
+			continue
+		}
+		b[i] = codeChars[idx.Int64()]
 	}
 	return string(b)
 }

@@ -167,15 +167,6 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 		return nil, err
 	}
 
-	var rl *RateLimitStatus
-	if s.rateLimit != nil {
-		st, err := s.rateLimit.CheckAndConsume(ctx, AIRateLimitScopeRecommend, userID)
-		if err != nil {
-			return &AIRecommendResult{RateLimit: st}, err
-		}
-		rl = st
-	}
-
 	batchID := uuid.New().String()
 	ttl := s.recommendTTL()
 	summaries := make([]AIRecommendItemSummary, 0, len(inputs))
@@ -219,9 +210,20 @@ func (s *AIRecommendService) Recommend(ctx context.Context, familyID, userID uin
 		})
 	}
 
-	_ = s.store.SetJSON(ctx, aiBatchKey(familyID, batchID), map[string]interface{}{
+	if err := s.store.SetJSON(ctx, aiBatchKey(familyID, batchID), map[string]interface{}{
 		"batch_id": batchID, "item_ids": pluckItemIDs(summaries), "created_at": time.Now(),
-	}, ttl)
+	}, ttl); err != nil {
+		return nil, err
+	}
+
+	var rl *RateLimitStatus
+	if s.rateLimit != nil {
+		st, err := s.rateLimit.CheckAndConsume(ctx, AIRateLimitScopeRecommend, userID)
+		if err != nil {
+			return &AIRecommendResult{RateLimit: st}, err
+		}
+		rl = st
+	}
 
 	return &AIRecommendResult{BatchID: batchID, Items: summaries, RateLimit: rl}, nil
 }
@@ -314,6 +316,8 @@ func (s *AIRecommendService) AddOrderFromItem(ctx context.Context, itemID string
 		}
 		if rec != nil {
 			recipeID = rec.ID
+		} else if id, ok := s.familyRecipeNameMap(familyID)[draft.Name]; ok {
+			recipeID = id
 		}
 	}
 	if recipeID == 0 {

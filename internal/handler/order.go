@@ -171,10 +171,14 @@ func (h *OrderHandler) List(c *gin.Context) {
 //   - 失败：{"code":400, "msg":"..."}
 func (h *OrderHandler) Remove(c *gin.Context) {
 	// 从 URL 路径参数解析点菜记录 ID
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的点菜 ID"})
+		return
+	}
+	familyID := middleware.GetFamilyID(c)
 
-	// 调用 service 层软删除（校验是否为点菜人本人）
-	if err := h.svc.Remove(id, middleware.GetUserID(c)); err != nil {
+	if err := h.svc.Remove(id, familyID, middleware.GetUserID(c)); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
 		return
 	}

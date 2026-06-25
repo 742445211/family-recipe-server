@@ -136,6 +136,13 @@ func TestAIRecommendEnabled(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsEmptyJWTSecret(t *testing.T) {
+	err := Validate(&Config{JWT: JWTConfig{Secret: "  "}})
+	if err == nil {
+		t.Fatal("empty jwt.secret should fail")
+	}
+}
+
 func TestLoadAppliesDefaults(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

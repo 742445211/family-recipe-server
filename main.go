@@ -26,6 +26,7 @@ func main() {
 	if err := config.Load("config.yaml"); err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
+	gin.SetMode(config.AppConfig.Server.Mode)
 
 	// 2. 连接 MySQL 数据库（GORM）
 	db, err := gorm.Open(mysql.Open(config.AppConfig.MySQL.DSN()), &gorm.Config{})
@@ -101,7 +102,7 @@ func main() {
 		api.POST("/auth/login", authH.Login) // 微信登录
 
 		recipeH := handler.NewRecipeHandler(db)
-		recipeBrowse := api.Group("", middleware.OptionalAuth())
+		recipeBrowse := api.Group("", middleware.OptionalAuth(db))
 		recipeBrowse.GET("/recipes", recipeH.List)       // 菜谱列表（本家 + 公开）
 		recipeBrowse.GET("/recipes/:id", recipeH.Get)   // 菜谱详情（本家或公开）
 		api.GET("/weather", aiH.Weather)      // 天气（默认成都）
@@ -111,7 +112,7 @@ func main() {
 		api.GET("/categories/public", categoryH.ListPublic) // 公开菜谱分类（无需登录）
 
 		// ---------- 需要认证的接口 ----------
-		auth := api.Group("", middleware.AuthRequired())
+		auth := api.Group("", middleware.AuthRequired(db))
 		{
 			// 用户信息
 			auth.GET("/users/me", authH.GetProfile)      // 获取个人信息
@@ -158,7 +159,7 @@ func main() {
 			auth.GET("/favorites", favH.List)          // 收藏列表
 
 			// 图片上传
-			uploadH := &handler.UploadHandler{ImageWorker: imageWorkerSvc}
+			uploadH := &handler.UploadHandler{DB: db, ImageWorker: imageWorkerSvc}
 			auth.POST("/upload", uploadH.Upload)
 
 			// AI 智能推荐

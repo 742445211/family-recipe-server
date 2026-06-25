@@ -117,17 +117,17 @@ func (s *BlindBoxService) Draw(ctx context.Context, familyID, userID uint64, dat
 		mealType = "dinner"
 	}
 
-	rl, err := s.consumeRate(ctx, userID)
-	if err != nil {
-		return &BlindBoxDrawResult{RateLimit: rl}, err
-	}
-
 	candidates, err := s.listCandidates(familyID, date, mealType, excludeIDs)
 	if err != nil {
 		return nil, err
 	}
 	if len(candidates) == 0 {
-		return &BlindBoxDrawResult{RateLimit: rl}, ErrBlindBoxNoCandidates
+		return nil, ErrBlindBoxNoCandidates
+	}
+
+	rl, err := s.consumeRate(ctx, userID)
+	if err != nil {
+		return &BlindBoxDrawResult{RateLimit: rl}, err
 	}
 
 	idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))

@@ -67,7 +67,7 @@ func (h *RecipeHandler) Create(c *gin.Context) {
 		return
 	}
 	if !bytes.Contains(body, []byte(`"is_public"`)) {
-		r.IsPublic = true
+		r.IsPublic = false
 	}
 
 	// 2. 服务端注入创建者 ID 和家庭 ID（不信任客户端传入）
@@ -88,7 +88,7 @@ func (h *RecipeHandler) Create(c *gin.Context) {
 
 	// 3. 调用 service 层创建菜谱
 	if err := h.svc.Create(&r); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建失败: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建失败"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": r})

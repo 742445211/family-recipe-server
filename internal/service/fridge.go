@@ -237,7 +237,8 @@ func (s *FridgeService) ApplyRecognizeResult(scanID uint64, detail json.RawMessa
 }
 
 func (s *FridgeService) ApplyRecognizeFailure(scanID uint64, errMsg string) error {
-	return s.db.Model(&model.FridgeScan{}).Where("id = ?", scanID).
+	return s.db.Model(&model.FridgeScan{}).
+		Where("id = ? AND status IN ?", scanID, []string{FridgeScanPending, FridgeScanProcessing}).
 		Updates(map[string]any{
 			"status":    FridgeScanFailed,
 			"error_msg": errMsg,
@@ -256,18 +257,21 @@ func (s *FridgeService) ConfirmScan(familyID, userID, scanID uint64, inputs []Fr
 
 	var created []model.FridgeItem
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		var scan model.FridgeScan
-		if err := tx.Where("id = ? AND family_id = ?", scanID, familyID).First(&scan).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrFridgeScanNotFound
-			}
-			return err
+		now := time.Now()
+		res := tx.Model(&model.FridgeScan{}).
+			Where("id = ? AND family_id = ? AND status = ?", scanID, familyID, FridgeScanDone).
+			Updates(map[string]any{
+				"status":       FridgeScanConfirmed,
+				"confirmed_at": now,
+			})
+		if res.Error != nil {
+			return res.Error
 		}
-		if scan.Status != FridgeScanDone {
+		if res.RowsAffected == 0 {
 			return ErrFridgeScanNotConfirmable
 		}
 
-		scanIDRef := scan.ID
+		scanIDRef := scanID
 		for _, in := range inputs {
 			item := model.FridgeItem{
 				FamilyID:   familyID,
@@ -284,12 +288,7 @@ func (s *FridgeService) ConfirmScan(familyID, userID, scanID uint64, inputs []Fr
 			}
 			created = append(created, item)
 		}
-
-		now := time.Now()
-		return tx.Model(&scan).Updates(map[string]any{
-			"status":        FridgeScanConfirmed,
-			"confirmed_at":  now,
-		}).Error
+		return nil
 	})
 	if err != nil {
 		return nil, err

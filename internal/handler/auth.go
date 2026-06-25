@@ -62,7 +62,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 1. 用小程序 code 换取微信 session（OpenID、UnionID 等）
 	session, err := service.Code2Session(req.Code)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "微信登录失败"})
 		return
 	}
 
@@ -92,10 +92,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		h.db.Save(&user) // Save 执行全量更新（包含 updated_at 时间戳）
 	}
 
-	// 3. 签发 JWT Token，包含用户 ID、OpenID 和当前家庭 ID
+	// 3. 签发 JWT Token，包含用户 ID、OpenID 和当前家庭 ID（须为家庭成员）
 	familyID := uint64(0)
 	if user.CurrentFamilyID != nil {
-		familyID = *user.CurrentFamilyID // 用户当前选中的家庭 ID
+		familyID = service.ResolveJWTFamilyID(h.db, user.ID, *user.CurrentFamilyID)
 	}
 	token, err := jwtPkg.Generate(config.AppConfig.JWT.Secret, config.AppConfig.JWT.ExpireHours, user.ID, user.OpenID, familyID)
 	if err != nil {
@@ -202,6 +202,10 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		updates["avatar_url"] = req.AvatarURL
 	}
 	if req.CurrentFamilyID != nil {
+		if !service.IsFamilyMember(h.db, userID, *req.CurrentFamilyID) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "不是该家庭的成员"})
+			return
+		}
 		updates["current_family_id"] = *req.CurrentFamilyID
 	}
 

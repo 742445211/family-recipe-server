@@ -21,10 +21,11 @@ func setupAuthRouter(t *testing.T) (*gin.Engine, *AuthHandler) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	testutil.EnsureAppConfig()
-	h := NewAuthHandler(testutil.SetupTestDB(t))
+	db := testutil.SetupTestDB(t)
+	h := NewAuthHandler(db)
 	r := gin.New()
 	r.POST("/api/auth/login", h.Login)
-	auth := r.Group("/api").Use(middleware.AuthRequired())
+	auth := r.Group("/api").Use(middleware.AuthRequired(db))
 	auth.GET("/users/me", h.GetProfile)
 	auth.PUT("/users/me", h.UpdateProfile)
 	return r, h

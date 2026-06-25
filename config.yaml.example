@@ -1,6 +1,8 @@
 server:
   port: 8080
   mode: release
+  # WebSocket 允许的 Origin（小程序可留空，浏览器客户端需配置）
+  allowed_origins: []
 
 mysql:
   host: 127.0.0.1

@@ -55,10 +55,12 @@
 |------|------|------|
 | nickname | string | 昵称 |
 | avatar_url | string | 头像 |
-| current_family_id | uint64 | 切换当前家庭 |
+| current_family_id | uint64 | 切换当前家庭（**须为已加入的家庭**，否则 400） |
 
 **响应：** `{ "code": 0, "msg": "ok" }`
 
 ---
 
-变更记录：2026-06-12 初版
+变更记录：
+- 2026-06-24 `current_family_id` 须校验家庭成员关系；JWT 中 family_id 非成员时视为 0
+- 2026-06-12 初版

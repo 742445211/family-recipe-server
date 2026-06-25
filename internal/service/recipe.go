@@ -82,7 +82,9 @@ func (s *RecipeService) Create(r *model.Recipe) error {
 //   - Updates 使用 struct 时只更新非零值字段，零值字段不会写入数据库
 //   - 如需将某字段重置为零值，应使用 Update + map 或 UpdateColumn
 func (s *RecipeService) Update(r *model.Recipe, familyID uint64) error {
-	res := s.db.Model(&model.Recipe{}).Where("id = ? AND family_id = ?", r.ID, familyID).Updates(r)
+	res := s.db.Model(&model.Recipe{}).Where("id = ? AND family_id = ?", r.ID, familyID).
+		Omit("FamilyID", "CreatorID", "ID").
+		Updates(r)
 	if res.Error != nil {
 		return res.Error
 	}

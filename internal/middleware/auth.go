@@ -37,7 +37,7 @@ func injectClaims(c *gin.Context, db *gorm.DB, claims *jwt.Claims) {
 	c.Set("openid", claims.OpenID)
 	familyID := claims.FamilyID
 	if db != nil {
-		familyID = service.ResolveJWTFamilyID(db, claims.UserID, claims.FamilyID)
+		familyID = service.ResolveEffectiveFamilyID(db, claims.UserID, claims.FamilyID)
 	}
 	c.Set("family_id", familyID)
 }

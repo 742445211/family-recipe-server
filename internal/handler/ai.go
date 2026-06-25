@@ -32,12 +32,19 @@ func aiRecommendDisabled(c *gin.Context) bool {
 	return false
 }
 
+func aiRequireFamily(c *gin.Context) (uint64, bool) {
+	return requireFamilyID(c)
+}
+
 // Recommend POST /api/ai/recommend
 func (h *AIHandler) Recommend(c *gin.Context) {
 	if aiRecommendDisabled(c) {
 		return
 	}
-	familyID := middleware.GetFamilyID(c)
+	familyID, ok := aiRequireFamily(c)
+	if !ok {
+		return
+	}
 	userID := middleware.GetUserID(c)
 	mealType := c.Query("meal_type")
 
@@ -63,7 +70,10 @@ func (h *AIHandler) GetItem(c *gin.Context) {
 		return
 	}
 	itemID := c.Param("item_id")
-	familyID := middleware.GetFamilyID(c)
+	familyID, ok := aiRequireFamily(c)
+	if !ok {
+		return
+	}
 	draft, err := h.recommend.GetItem(c.Request.Context(), itemID, familyID)
 	if errors.Is(err, service.ErrAIItemNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": err.Error()})
@@ -88,7 +98,10 @@ func (h *AIHandler) ImportRecipe(c *gin.Context) {
 		return
 	}
 	itemID := c.Param("item_id")
-	familyID := middleware.GetFamilyID(c)
+	familyID, ok := aiRequireFamily(c)
+	if !ok {
+		return
+	}
 	userID := middleware.GetUserID(c)
 	rec, err := h.recommend.ImportRecipe(c.Request.Context(), itemID, familyID, userID)
 	if errors.Is(err, service.ErrAIItemNotFound) {
@@ -116,7 +129,10 @@ func (h *AIHandler) AddOrder(c *gin.Context) {
 		return
 	}
 	itemID := c.Param("item_id")
-	familyID := middleware.GetFamilyID(c)
+	familyID, ok := aiRequireFamily(c)
+	if !ok {
+		return
+	}
 	userID := middleware.GetUserID(c)
 	var req service.AddOrderFromAIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -132,12 +148,8 @@ func (h *AIHandler) AddOrder(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"code": 403, "msg": err.Error()})
 		return
 	}
-	if err != nil && err.Error() == "该餐次已点过这道菜" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
-		return
-	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error()})
+		writeOrderAddError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": order})

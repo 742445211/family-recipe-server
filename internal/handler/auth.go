@@ -214,5 +214,15 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "更新失败"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok"})
+
+	resp := gin.H{"code": 0, "msg": "ok"}
+	if req.CurrentFamilyID != nil {
+		token, err := service.IssueUserJWT(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "生成token失败"})
+			return
+		}
+		resp["data"] = gin.H{"token": token}
+	}
+	c.JSON(http.StatusOK, resp)
 }

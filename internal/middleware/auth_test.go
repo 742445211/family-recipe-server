@@ -78,13 +78,13 @@ func TestAuthRequiredValidTokenWithMembership(t *testing.T) {
 	}
 }
 
-func TestAuthRequiredStripsInvalidFamilyClaim(t *testing.T) {
+func TestAuthRequiredFallsBackWhenInvalidFamilyClaim(t *testing.T) {
 	old := config.AppConfig
 	config.AppConfig = &config.Config{JWT: config.JWTConfig{Secret: "test-secret", ExpireHours: 1}}
 	t.Cleanup(func() { config.AppConfig = old })
 
 	db := testutil.SetupTestDB(t)
-	userID, _ := testutil.SeedUserAndFamily(t, db)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
 
 	token, err := jwtPkg.Generate("test-secret", 1, userID, "openid-1", 99999)
 	if err != nil {
@@ -94,8 +94,8 @@ func TestAuthRequiredStripsInvalidFamilyClaim(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/protected", AuthRequired(db), func(c *gin.Context) {
-		if GetFamilyID(c) != 0 {
-			t.Fatalf("invalid family claim should be 0, got %d", GetFamilyID(c))
+		if GetFamilyID(c) != familyID {
+			t.Fatalf("invalid claim should fall back to current_family_id %d, got %d", familyID, GetFamilyID(c))
 		}
 		c.Status(http.StatusOK)
 	})

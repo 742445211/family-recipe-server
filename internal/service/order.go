@@ -33,6 +33,7 @@ var validMealTypes = map[string]struct{}{
 	"breakfast": {},
 	"lunch":     {},
 	"dinner":    {},
+	"supper":    {},
 }
 
 func normalizeMealTypeInput(mealType string) (string, error) {
@@ -102,6 +103,9 @@ func (s *OrderService) DB() *gorm.DB {
 //   - 去重检查：同一家庭同日期同餐次不允许点同一道菜（软删除的记录不计入重复判断）
 //   - 创建后立即预加载关联数据（Recipe、Adder），以便返回完整的点菜信息给前端
 func (s *OrderService) Add(familyID, recipeID uint64, mealType string, userID uint64, date, note string, quantity int) (*model.DailyOrder, error) {
+	if familyID == 0 {
+		return nil, ErrNoFamily
+	}
 	if quantity <= 0 {
 		quantity = 1
 	}
@@ -254,7 +258,7 @@ func (s *OrderService) GetRecentOrderNames(familyID uint64, days int, maxMeals i
 	var orders []model.DailyOrder
 	err := s.db.Preload("Recipe").
 		Where("family_id = ? AND date >= ?", familyID, since).
-		Order("date DESC, CASE meal_type WHEN 'dinner' THEN 3 WHEN 'lunch' THEN 2 ELSE 1 END DESC, created_at DESC").
+		Order("date DESC, CASE meal_type WHEN 'supper' THEN 4 WHEN 'dinner' THEN 3 WHEN 'lunch' THEN 2 ELSE 1 END DESC, created_at DESC").
 		Limit(maxMeals).
 		Find(&orders).Error
 	if err != nil {

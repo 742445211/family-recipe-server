@@ -205,7 +205,12 @@ func (h *RecipeHandler) Get(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "菜谱不存在"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": r})
+	userID := middleware.GetUserID(c)
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"msg":  "ok",
+		"data": recipeWithFavorite{Recipe: *r, IsFavorited: isRecipeFavorited(h.db, userID, r.ID)},
+	})
 }
 
 // List 获取菜谱列表接口（分页，支持搜索和分类筛选）。
@@ -241,7 +246,13 @@ func (h *RecipeHandler) List(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
-		"data": pagePayload(recipes, total, page, pageSize),
+		"data": gin.H{
+			"list":      recipesWithFavoriteFlags(h.db, middleware.GetUserID(c), recipes),
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+			"has_more":  int64(page*pageSize) < total,
+		},
 	})
 }
 

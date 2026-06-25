@@ -124,3 +124,40 @@ func TestAuthUpdateProfile(t *testing.T) {
 		t.Fatalf("nickname: %q", updated.Nickname)
 	}
 }
+
+func TestAuthUpdateProfileSwitchFamilyReturnsToken(t *testing.T) {
+	r, h := setupAuthRouter(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, h.db)
+
+	other := model.Family{Name: "第二家", InviteCode: "SEC001"}
+	h.db.Create(&other)
+	h.db.Create(&model.FamilyMember{FamilyID: other.ID, UserID: userID, Role: "member"})
+
+	token, _ := jwtPkg.Generate(config.AppConfig.JWT.Secret, 24, userID, "oid", familyID)
+	body, _ := json.Marshal(map[string]any{"current_family_id": other.ID})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/users/me", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Token string `json:"token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Data.Token == "" {
+		t.Fatal("切换家庭应返回新 token")
+	}
+	claims, err := jwtPkg.Parse(config.AppConfig.JWT.Secret, resp.Data.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.FamilyID != other.ID {
+		t.Fatalf("token family_id: want %d got %d", other.ID, claims.FamilyID)
+	}
+}

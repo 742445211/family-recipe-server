@@ -48,7 +48,12 @@ func (h *OrderHandler) DrawBlindBox(c *gin.Context) {
 		mealType = "dinner"
 	}
 
-	res, err := h.blindBox.Draw(c.Request.Context(), middleware.GetFamilyID(c), middleware.GetUserID(c), date, mealType, req.ExcludeIDs)
+	familyID, ok := requireFamilyID(c)
+	if !ok {
+		return
+	}
+
+	res, err := h.blindBox.Draw(c.Request.Context(), familyID, middleware.GetUserID(c), date, mealType, req.ExcludeIDs)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrBlindBoxRateLimit):

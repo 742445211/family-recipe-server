@@ -140,15 +140,17 @@ func (h *FamilyHandler) Join(c *gin.Context) {
 		Role:     "member",
 	}
 
-	// 4. FirstOrCreate：如果已加入则忽略，否则插入新记录（幂等操作）
-	if err := h.db.Where(model.FamilyMember{FamilyID: family.ID, UserID: userID}).
-		FirstOrCreate(&member).Error; err != nil {
+	// 4. FirstOrCreate + 设为当前家庭（事务）
+	if err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where(model.FamilyMember{FamilyID: family.ID, UserID: userID}).
+			FirstOrCreate(&member).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.User{}).Where("id = ?", userID).Update("current_family_id", family.ID).Error
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "加入失败"})
 		return
 	}
-
-	// 5. 设为当前家庭
-	h.db.Model(&model.User{}).Where("id = ?", userID).Update("current_family_id", family.ID)
 
 	token, err := service.IssueUserJWT(h.db, userID)
 	if err != nil {

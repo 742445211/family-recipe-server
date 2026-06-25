@@ -59,8 +59,14 @@
 
 **响应：** `{ "code": 0, "msg": "ok" }`
 
+切换 `current_family_id` 成功时额外返回：
+
+```json
+{ "code": 0, "msg": "ok", "data": { "token": "eyJ..." } }
+```
+
 ---
 
 变更记录：
-- 2026-06-24 `current_family_id` 须校验家庭成员关系；JWT 中 family_id 非成员时视为 0
+- 2026-06-24 切换家庭返回新 token；`current_family_id` 须校验家庭成员关系；JWT 中 family_id 非成员时 middleware 回退 `current_family_id`
 - 2026-06-12 初版

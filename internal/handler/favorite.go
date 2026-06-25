@@ -115,7 +115,8 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 	page, pageSize := pageParams(c)
 	userID := middleware.GetUserID(c)
 
-	query := h.db.Model(&model.Favorite{}).Where("user_id = ?", userID)
+	query := h.db.Model(&model.Favorite{}).Where("user_id = ?", userID).
+		Joins("JOIN recipes ON recipes.id = favorites.recipe_id AND recipes.deleted_at IS NULL")
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "查询失败"})
@@ -126,7 +127,7 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 	var favs []model.Favorite
 	if err := query.
 		Preload("Recipe").
-		Order("created_at DESC").
+		Order("favorites.created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
 		Find(&favs).Error; err != nil {

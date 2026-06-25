@@ -333,7 +333,13 @@ func (s *AIRecommendService) AddOrderFromItem(ctx context.Context, itemID string
 	}
 	meal := req.MealType
 	if meal == "" {
+		meal = draft.MealType
+	}
+	if meal == "" {
 		meal = "dinner"
+	}
+	if ms, ok := NormalizeMealSlot(meal); ok {
+		meal = ms.Type
 	}
 	return s.orders.Add(familyID, recipeID, meal, userID, date, req.Note, qty)
 }

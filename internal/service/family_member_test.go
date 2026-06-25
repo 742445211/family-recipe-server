@@ -32,6 +32,18 @@ func TestResolveJWTFamilyID(t *testing.T) {
 	if got := ResolveJWTFamilyID(db, userID, familyID+100); got != 0 {
 		t.Fatalf("non-member claim should be 0, got %d", got)
 	}
+	if got := ResolveJWTFamilyID(db, userID, 0); got != 0 {
+		t.Fatalf("zero claim should be 0, got %d", got)
+	}
+}
+
+func TestResolveEffectiveFamilyIDFallsBackToCurrentFamily(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
+
+	if got := ResolveEffectiveFamilyID(db, userID, 0); got != familyID {
+		t.Fatalf("JWT family_id=0 时应回退 current_family_id, want %d got %d", familyID, got)
+	}
 }
 
 func TestAssertFamilyMember(t *testing.T) {

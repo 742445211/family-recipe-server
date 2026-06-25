@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"testing"
 
 	"recipe-server/internal/model"
@@ -28,7 +29,16 @@ func TestOrderAddAndList(t *testing.T) {
 		t.Errorf("数量: want 2, got %d", order.Quantity)
 	}
 
-	// 同餐次重复点菜应失败
+	// 同餐次重复点同一道菜应失败
+	_, err = svc.Add(familyID, recipe.ID, "dinner", userID, "2026-05-01", "", 1)
+	if err == nil {
+		t.Fatal("同餐次重复点同一道菜应失败")
+	}
+	if !errors.Is(err, ErrDuplicateOrder) {
+		t.Fatalf("want ErrDuplicateOrder, got %v", err)
+	}
+
+	// 第二道不同菜同餐次应成功
 	recipe2 := model.Recipe{Name: "宫保鸡丁", Category: "荤菜", CreatorID: userID, FamilyID: familyID}
 	db.Create(&recipe2)
 	_, err = svc.Add(familyID, recipe2.ID, "dinner", userID, "2026-05-01", "", 1)
@@ -101,5 +111,35 @@ func TestOrderAddAllowsPublicRecipeFromOtherFamily(t *testing.T) {
 	}
 	if order.RecipeID != pub.ID {
 		t.Fatalf("recipe_id: got %d", order.RecipeID)
+	}
+}
+
+func TestOrderAddRejectsNoFamily(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
+	recipe := model.Recipe{Name: "公开菜", CreatorID: userID, FamilyID: familyID, IsPublic: true}
+	db.Create(&recipe)
+
+	svc := NewOrderService(db)
+	if _, err := svc.Add(0, recipe.ID, "dinner", userID, "2026-05-01", "", 1); err == nil {
+		t.Fatal("family_id=0 不应允许点菜")
+	} else if !errors.Is(err, ErrNoFamily) {
+		t.Fatalf("want ErrNoFamily, got %v", err)
+	}
+}
+
+func TestOrderAddSupperMealType(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	userID, familyID := testutil.SeedUserAndFamily(t, db)
+	recipe := model.Recipe{Name: "夜宵面", CreatorID: userID, FamilyID: familyID}
+	db.Create(&recipe)
+
+	svc := NewOrderService(db)
+	order, err := svc.Add(familyID, recipe.ID, "supper", userID, "2026-05-03", "", 1)
+	if err != nil {
+		t.Fatalf("supper 餐次点菜失败: %v", err)
+	}
+	if order.MealType != "supper" {
+		t.Fatalf("meal_type: got %q", order.MealType)
 	}
 }

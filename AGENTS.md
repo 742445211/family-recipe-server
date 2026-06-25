@@ -39,7 +39,7 @@ pkg/jwt/                       # JWT 签发与解析
 
 - **用户**：微信 `code` 登录，JWT 有效期见 `jwt.expire_hours`
 - **家庭**：邀请码加入；`family_members.is_chef` 标识厨师
-- **点菜**：`daily_orders` 按 `date` + `meal_type`（breakfast/lunch/dinner）；同餐次同菜不可重复
+- **点菜**：`daily_orders` 按 `date` + `meal_type`（breakfast/lunch/dinner/supper）；同餐次同菜不可重复
 - **通知**（点菜成功后异步）：
   1. 写入 `notifications`（强一致）
   2. 调度通道写 `notification_deliveries`

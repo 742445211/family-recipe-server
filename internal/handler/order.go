@@ -8,7 +8,6 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -48,7 +47,7 @@ func NewOrderHandler(db *gorm.DB, hub *service.WebSocketHub, blindBox *service.B
 type addOrderReq struct {
 	RecipeID uint64 `json:"recipe_id" binding:"required"` // 菜谱 ID（必填）
 	Date     string `json:"date"`                         // 日期 YYYY-MM-DD（默认今天）
-	MealType string `json:"meal_type"`                    // 餐次：breakfast/lunch/dinner（默认 dinner）
+	MealType string `json:"meal_type"`                    // 餐次：breakfast/lunch/dinner/supper（默认 dinner）
 	Quantity int    `json:"quantity"`                     // 份数（默认 1）
 	Note     string `json:"note"`                         // 备注说明
 }
@@ -64,7 +63,7 @@ type addOrderReq struct {
 // 请求 Body：
 //   - recipe_id: uint64 (必填) 菜谱 ID
 //   - date: string (可选) 日期，格式 YYYY-MM-DD，默认今天
-//   - meal_type: string (可选) 餐次 breakfast/lunch/dinner，默认 dinner
+//   - meal_type: string (可选) 餐次 breakfast/lunch/dinner/supper，默认 dinner
 //   - quantity: int (可选) 份数，默认 1
 //   - note: string (可选) 备注
 //
@@ -91,29 +90,25 @@ func (h *OrderHandler) Add(c *gin.Context) {
 		req.Quantity = 1 // 份数非法则默认为 1
 	}
 
+	familyID, ok := requireFamilyID(c)
+	if !ok {
+		return
+	}
+
 	// 调用 service 层创建点菜记录
 	order, err := h.svc.Add(
-		middleware.GetFamilyID(c),
+		familyID,
 		req.RecipeID,
 		req.MealType,
 		middleware.GetUserID(c),
 		req.Date, req.Note, req.Quantity,
 	)
 	if err != nil {
-		if err.Error() == "该餐次已点过这道菜" {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
-			return
-		}
-		if errors.Is(err, service.ErrRecipeNotInFamily) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "菜谱不存在或不属于当前家庭"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "点菜失败"})
+		writeOrderAddError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": order})
 
-	familyID := middleware.GetFamilyID(c)
 	orderDate := req.Date
 	orderID := order.ID
 	db := h.svc.DB()
@@ -197,14 +192,27 @@ func (h *OrderHandler) Remove(c *gin.Context) {
 //   - 成功：{"code":0, "data":{"activity_id":"xxx"}}
 //   - 失败：{"code":500, "msg":"创建失败"}
 func (h *OrderHandler) Share(c *gin.Context) {
+	var req struct {
+		Date string `json:"date"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
 	activityID, err := service.CreateActivityID()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建分享失败: " + err.Error()})
 		return
 	}
 
-	// 记录 activity_id 对应关系，后续点菜时更新卡片
-	service.StoreActivity(activityID, middleware.GetFamilyID(c), today())
+	shareDate := dateutil.FormatYMD(req.Date)
+	if shareDate == "" {
+		shareDate = today()
+	}
+	familyID, ok := requireFamilyID(c)
+	if !ok {
+		return
+	}
+
+	service.StoreActivity(activityID, familyID, shareDate)
 
 	c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"activity_id": activityID}})
 }

@@ -18,6 +18,8 @@ jwt:
 wechat:
   appid: "YOUR_MINIAPP_APPID"
   secret: "YOUR_MINIAPP_SECRET"
+  # 内容安全 msgSecCheck（小程序审核必需，默认 true）
+  sec_check_enabled: true
 
 oss:
   endpoint: "oss-cn-xxx.aliyuncs.com"

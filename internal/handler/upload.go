@@ -30,8 +30,11 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 	}
 	defer file.Close()
 
-	key, url, err := service.SaveImage(file, header)
+	key, url, err := service.UploadImage(middleware.GetOpenID(c), file, header)
 	if err != nil {
+		if respondSecCheck(c, err) {
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
 		return
 	}

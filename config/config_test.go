@@ -136,6 +136,22 @@ func TestAIRecommendEnabled(t *testing.T) {
 	}
 }
 
+func TestSecCheckEnabled(t *testing.T) {
+	if (&Config{}).SecCheckEnabled() {
+		t.Fatal("未配置 wechat 时不应启用")
+	}
+	enabled := true
+	cfg := &Config{WeChat: WeChatConfig{AppID: "wx", Secret: "sec", SecCheckEnabled: &enabled}}
+	if !cfg.SecCheckEnabled() {
+		t.Fatal("应启用")
+	}
+	disabled := false
+	cfg.WeChat.SecCheckEnabled = &disabled
+	if cfg.SecCheckEnabled() {
+		t.Fatal("显式 false 时应关闭")
+	}
+}
+
 func TestValidateRejectsEmptyJWTSecret(t *testing.T) {
 	err := Validate(&Config{JWT: JWTConfig{Secret: "  "}})
 	if err == nil {

@@ -86,6 +86,10 @@ func (h *RecipeHandler) Create(c *gin.Context) {
 	}
 	r.Category = category
 
+	if respondSecCheck(c, service.DefaultSecCheck.CheckRecipeUGC(middleware.GetOpenID(c), &r)) {
+		return
+	}
+
 	// 3. 调用 service 层创建菜谱
 	if err := h.svc.Create(&r); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建失败"})
@@ -137,6 +141,9 @@ func (h *RecipeHandler) Update(c *gin.Context) {
 		} else {
 			r.Category = category
 		}
+	}
+	if respondSecCheck(c, service.DefaultSecCheck.CheckRecipeUGC(middleware.GetOpenID(c), &r)) {
+		return
 	}
 	if err := h.svc.Update(&r, familyID); err != nil {
 		if errors.Is(err, service.ErrRecipeNotInFamily) {

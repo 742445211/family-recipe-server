@@ -57,10 +57,11 @@ type JWTConfig struct {
 
 // WeChatConfig 微信小程序配置。
 type WeChatConfig struct {
-	AppID            string `yaml:"appid"`             // 小程序 AppID
-	Secret           string `yaml:"secret"`            // 小程序 AppSecret
-	TemplateID       string `yaml:"template_id"`       // 订阅消息模板 ID
-	MiniprogramState string `yaml:"miniprogram_state"` // 小程序版本：developer / trial / formal
+	AppID            string `yaml:"appid"`               // 小程序 AppID
+	Secret           string `yaml:"secret"`              // 小程序 AppSecret
+	TemplateID       string `yaml:"template_id"`         // 订阅消息模板 ID
+	MiniprogramState string `yaml:"miniprogram_state"`   // 小程序版本：developer / trial / formal
+	SecCheckEnabled  *bool  `yaml:"sec_check_enabled"`   // 内容安全 API（msgSecCheck），默认 true
 }
 
 // OSSConfig 阿里云 OSS 对象存储配置。
@@ -304,6 +305,17 @@ func (c *Config) WeChatConfigured() bool {
 		return false
 	}
 	return strings.TrimSpace(c.WeChat.AppID) != "" && strings.TrimSpace(c.WeChat.Secret) != ""
+}
+
+// SecCheckEnabled 是否启用微信内容安全 msgSecCheck（需已配置小程序凭证）。
+func (c *Config) SecCheckEnabled() bool {
+	if c == nil || !c.WeChatConfigured() {
+		return false
+	}
+	if c.WeChat.SecCheckEnabled != nil {
+		return *c.WeChat.SecCheckEnabled
+	}
+	return true
 }
 
 // WeChatSubscribeConfigured 微信订阅消息通道是否具备发送条件。

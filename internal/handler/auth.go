@@ -196,6 +196,9 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	// 构建部分更新字段 map（仅回填非空值，避免误覆盖）
 	updates := map[string]any{}
 	if req.Nickname != "" {
+		if respondSecCheck(c, service.DefaultSecCheck.CheckTexts(middleware.GetOpenID(c), service.SecCheckSceneProfile, req.Nickname)) {
+			return
+		}
 		updates["nickname"] = req.Nickname
 	}
 	if req.AvatarURL != "" {

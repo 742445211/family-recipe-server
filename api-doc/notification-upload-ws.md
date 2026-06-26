@@ -52,7 +52,7 @@
 
 ## POST /upload
 
-上传图片（需登录）。支持 jpg/jpeg/png/webp/gif，最大 10MB。
+上传图片（需登录）。支持 jpg/jpeg/png/webp/gif；启用内容安全时单张 **≤1MB**（微信 img_sec_check 限制），否则最大 10MB。
 
 **请求：** `multipart/form-data`
 
@@ -61,7 +61,22 @@
 | file | file | 是 | 图片文件 |
 | recipe_id | uint64 | 否 | 关联本家庭菜谱 ID（压缩完成后更新封面） |
 
-**错误：** 400 格式/大小不合法；菜谱不存在或非本家庭
+上传前调用微信 **img_sec_check** 检测图片内容。违规时：
+
+```json
+{ "code": 400, "msg": "您发布的内容含违规信息，请修改后重试" }
+```
+
+**响应 data：**
+
+```json
+{
+  "key": "recipe/1730000000123456789.jpg",
+  "url": "https://cdn.example.com/..."
+}
+```
+
+**错误：** 400 格式/大小不合法 / 内容违规；菜谱不存在或非本家庭
 
 ---
 
@@ -86,5 +101,6 @@ WebSocket 厨师通知（非 REST JSON）。
 ---
 
 变更记录：
+- 2026-06-24 上传接口增加 img_sec_check 图片内容安全检测
 - 2026-06-24 上传校验格式/大小与 recipe_id 归属；WebSocket 支持 Bearer 鉴权与 Origin 限制
 - 2026-06-12 初版

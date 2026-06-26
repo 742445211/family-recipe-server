@@ -14,6 +14,7 @@
 package service
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -32,19 +33,57 @@ var allowedUploadExts = map[string]struct{}{
 	".jpg": {}, ".jpeg": {}, ".png": {}, ".webp": {}, ".gif": {},
 }
 
-// ValidateUploadFile 校验上传文件大小与扩展名。
-func ValidateUploadFile(header *multipart.FileHeader) error {
-	if header.Size <= 0 {
+// ValidateUploadBytes 校验上传文件大小与扩展名。
+func ValidateUploadBytes(filename string, size int) error {
+	if size <= 0 {
 		return fmt.Errorf("文件为空")
 	}
-	if header.Size > maxUploadBytes {
+	if size > maxUploadBytes {
 		return fmt.Errorf("文件过大，最大 10MB")
 	}
-	ext := strings.ToLower(filepath.Ext(header.Filename))
+	ext := strings.ToLower(filepath.Ext(filename))
 	if _, ok := allowedUploadExts[ext]; !ok {
 		return fmt.Errorf("不支持的图片格式")
 	}
 	return nil
+}
+
+// ValidateUploadFile 校验 multipart 文件头。
+func ValidateUploadFile(header *multipart.FileHeader) error {
+	return ValidateUploadBytes(header.Filename, int(header.Size))
+}
+
+// SaveImageBytes 将已读入内存的图片上传 OSS。
+func SaveImageBytes(data []byte, filename, contentType string) (string, string, error) {
+	if err := ValidateUploadBytes(filename, len(data)); err != nil {
+		return "", "", err
+	}
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == "" {
+		ext = ".jpg"
+	}
+	key := fmt.Sprintf("recipe/%d%s", time.Now().UnixNano(), ext)
+	cfg := config.AppConfig.OSS
+	url, err := uploadToOSS(cfg, key, bytes.NewReader(data), int64(len(data)), contentType)
+	if err != nil {
+		return "", "", fmt.Errorf("OSS上传失败: %w", err)
+	}
+	return key, url, nil
+}
+
+// UploadImage 校验、内容安全检测并上传图片。
+func UploadImage(openid string, file multipart.File, header *multipart.FileHeader) (string, string, error) {
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", "", fmt.Errorf("读取文件失败: %w", err)
+	}
+	if err := ValidateUploadBytes(header.Filename, len(data)); err != nil {
+		return "", "", err
+	}
+	if err := DefaultSecCheck.CheckImage(openid, data, header.Filename); err != nil {
+		return "", "", err
+	}
+	return SaveImageBytes(data, header.Filename, header.Header.Get("Content-Type"))
 }
 
 // SaveImage 上传图片到阿里云 OSS，并返回存储 key 和可访问的完整 URL。
@@ -62,21 +101,14 @@ func ValidateUploadFile(header *multipart.FileHeader) error {
 //   - 文件扩展名从原始文件名提取，若无扩展名则默认使用 .jpg
 //   - key 使用纳秒级时间戳保证唯一性，避免同名文件覆盖
 func SaveImage(file multipart.File, header *multipart.FileHeader) (string, string, error) {
-	if err := ValidateUploadFile(header); err != nil {
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", "", fmt.Errorf("读取文件失败: %w", err)
+	}
+	if err := ValidateUploadBytes(header.Filename, len(data)); err != nil {
 		return "", "", err
 	}
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-
-	// 生成唯一 OSS key：recipe/{时间戳纳秒}{扩展名}
-	key := fmt.Sprintf("recipe/%d%s", time.Now().UnixNano(), ext)
-
-	// 调取底层 OSS 上传函数
-	cfg := config.AppConfig.OSS
-	url, err := uploadToOSS(cfg, key, file, header.Size, header.Header.Get("Content-Type"))
-	if err != nil {
-		return "", "", fmt.Errorf("OSS上传失败: %w", err)
-	}
-	return key, url, nil
+	return SaveImageBytes(data, header.Filename, header.Header.Get("Content-Type"))
 }
 
 // BuildObjectURL 根据 OSS key 构建可访问 URL。

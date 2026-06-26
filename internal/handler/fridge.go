@@ -85,6 +85,9 @@ func (h *FridgeHandler) CreateItems(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请提供食材信息"})
 		return
 	}
+	if respondSecCheck(c, service.DefaultSecCheck.CheckFridgeInputs(middleware.GetOpenID(c), inputs)) {
+		return
+	}
 	userID := middleware.GetUserID(c)
 	if len(inputs) == 1 {
 		item, err := h.svc.CreateItem(familyID, userID, inputs[0])
@@ -116,6 +119,9 @@ func (h *FridgeHandler) UpdateItem(c *gin.Context) {
 	var in service.FridgeItemInput
 	if err := c.ShouldBindJSON(&in); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "参数错误"})
+		return
+	}
+	if respondSecCheck(c, service.DefaultSecCheck.CheckFridgeInputs(middleware.GetOpenID(c), []service.FridgeItemInput{in})) {
 		return
 	}
 	item, err := h.svc.UpdateItem(familyID, id, in)
@@ -168,9 +174,12 @@ func (h *FridgeHandler) CreateScan(c *gin.Context) {
 	}
 	defer file.Close()
 
-	key, url, err := service.SaveImage(file, header)
+	key, url, err := service.UploadImage(middleware.GetOpenID(c), file, header)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error()})
+		if respondSecCheck(c, err) {
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
 		return
 	}
 
@@ -266,6 +275,9 @@ func (h *FridgeHandler) ConfirmScan(c *gin.Context) {
 	var req fridgeConfirmReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "参数错误"})
+		return
+	}
+	if respondSecCheck(c, service.DefaultSecCheck.CheckFridgeInputs(middleware.GetOpenID(c), req.Items)) {
 		return
 	}
 	userID := middleware.GetUserID(c)

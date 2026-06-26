@@ -57,6 +57,9 @@ func (h *FamilyHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "家庭名称不能为空"})
 		return
 	}
+	if respondSecCheck(c, service.DefaultSecCheck.CheckTexts(middleware.GetOpenID(c), service.SecCheckSceneProfile, f.Name)) {
+		return
+	}
 
 	// 2. 从 JWT 上下文中获取当前用户 ID
 	userID := middleware.GetUserID(c)

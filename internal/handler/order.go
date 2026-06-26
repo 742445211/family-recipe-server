@@ -95,6 +95,10 @@ func (h *OrderHandler) Add(c *gin.Context) {
 		return
 	}
 
+	if respondSecCheck(c, service.DefaultSecCheck.CheckTexts(middleware.GetOpenID(c), service.SecCheckSceneComment, req.Note)) {
+		return
+	}
+
 	// 调用 service 层创建点菜记录
 	order, err := h.svc.Add(
 		familyID,

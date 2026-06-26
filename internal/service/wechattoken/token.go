@@ -42,6 +42,16 @@ func SharedMiniProgramToken() Provider {
 // wechatTokenAPIBase 小程序 token API 根地址（测试可替换）。
 var wechatTokenAPIBase = "https://api.weixin.qq.com"
 
+// SetWechatTokenAPIBaseForTest 测试专用：替换 token API 基址。
+func SetWechatTokenAPIBaseForTest(base string) {
+	wechatTokenAPIBase = base
+}
+
+// WechatTokenAPIBaseForTest 测试专用：读取当前 token API 基址。
+func WechatTokenAPIBaseForTest() string {
+	return wechatTokenAPIBase
+}
+
 // InvalidateSharedMiniProgramToken 清除共享 token，供 40001 后强制刷新。
 func InvalidateSharedMiniProgramToken() {
 	sharedMiniProgram.Invalidate()

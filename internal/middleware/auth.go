@@ -32,6 +32,16 @@ func GetFamilyID(c *gin.Context) uint64 {
 	return v
 }
 
+// GetOpenID 从 Gin context 中获取当前用户微信 OpenID。
+func GetOpenID(c *gin.Context) string {
+	v, ok := c.Get("openid")
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
+}
+
 func injectClaims(c *gin.Context, db *gorm.DB, claims *jwt.Claims) {
 	c.Set("user_id", claims.UserID)
 	c.Set("openid", claims.OpenID)

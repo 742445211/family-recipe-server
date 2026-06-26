@@ -22,13 +22,13 @@ Authorization: Bearer <token>
 
 ## 内容安全
 
-用户可发布文本的接口（新增/编辑菜谱、点菜备注、昵称、家庭名、冰箱食材等）在保存前会调用微信小程序 **msgSecCheck**；**POST /upload** 与 **POST /fridge/scans** 上传图片前会调用 **img_sec_check**（单张 ≤1MB，需配置 `wechat.appid` / `wechat.secret`，`wechat.sec_check_enabled` 默认 `true`）。违规时 HTTP 400：
+用户可发布文本的接口（新增/编辑菜谱、点菜备注、昵称、家庭名、冰箱食材等）在保存前会调用微信小程序 **msgSecCheck**；**POST /upload** 与 **POST /fridge/scans** 上传图片前会调用 **img_sec_check**（需配置 `wechat.appid` / `wechat.secret`，`wechat.sec_check_enabled` 默认 `true`）。单张最大 **10MB**；超过微信 1MB 检测上限时由**服务端自动压缩**后再送检，**原图仍按原流程上传 OSS**（菜谱封面仍可由树莓派异步压缩）。违规时 HTTP 400：
 
 ```json
 { "code": 400, "msg": "您发布的内容含违规信息，请修改后重试" }
 ```
 
-图片超过 1MB 时返回 `{ "code": 400, "msg": "图片过大，请压缩至1MB以内后上传" }`。
+图片无法压缩到检测上限内时返回 `{ "code": 400, "msg": "图片压缩失败，请换一张较小的图片" }`。
 
 ## 统一响应
 

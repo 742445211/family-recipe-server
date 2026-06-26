@@ -80,7 +80,11 @@ func UploadImage(openid string, file multipart.File, header *multipart.FileHeade
 	if err := ValidateUploadBytes(header.Filename, len(data)); err != nil {
 		return "", "", err
 	}
-	if err := DefaultSecCheck.CheckImage(openid, data, header.Filename); err != nil {
+	checkData, checkName, err := DefaultSecCheck.PrepareImageForCheck(data, header.Filename)
+	if err != nil {
+		return "", "", err
+	}
+	if err := DefaultSecCheck.CheckImage(openid, checkData, checkName); err != nil {
 		return "", "", err
 	}
 	return SaveImageBytes(data, header.Filename, header.Header.Get("Content-Type"))

@@ -18,7 +18,7 @@ func respondSecCheck(c *gin.Context, err error) bool {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": service.ErrContentUnsafe.Error()})
 		return true
 	}
-	if errors.Is(err, service.ErrImageTooLargeForSecCheck) {
+	if errors.Is(err, service.ErrImageTooLargeForSecCheck) || errors.Is(err, service.ErrImageCompressFailed) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
 		return true
 	}

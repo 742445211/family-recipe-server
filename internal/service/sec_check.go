@@ -98,6 +98,14 @@ func (s *SecCheckService) CheckRecipeUGC(openid string, r *model.Recipe) error {
 	return s.CheckTexts(openid, SecCheckSceneProfile, texts...)
 }
 
+// PrepareImageForCheck 为 img_sec_check 准备图片；未启用或已足够小时原样返回。
+func (s *SecCheckService) PrepareImageForCheck(data []byte, filename string) ([]byte, string, error) {
+	if s == nil || !s.enabled() || len(data) <= maxImgSecCheckBytes {
+		return data, filename, nil
+	}
+	return PrepareImageForSecCheck(data, filename)
+}
+
 // CheckImage 调用微信 img_sec_check 检测图片（同步，最大 1MB）。
 func (s *SecCheckService) CheckImage(openid string, data []byte, filename string) error {
 	if s == nil || !s.enabled() {

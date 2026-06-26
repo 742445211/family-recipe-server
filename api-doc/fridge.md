@@ -78,12 +78,12 @@
 
 拍照上传并发起识别（需登录）。
 
-**请求：** `multipart/form-data`，字段 `file`（图片，启用内容安全时 ≤1MB）
+**请求：** `multipart/form-data`，字段 `file`（图片，最大 10MB）
 
 **流程：**
 
-1. 调用微信 **img_sec_check** 检测图片
-2. 上传 OSS
+1. 若启用内容安全：超过 1MB 时服务端压缩后再调用微信 **img_sec_check** 检测
+2. 上传**原图** OSS
 3. 创建 `fridge_scans` 任务
 4. 经 WebSocket 派发 `recognize` 任务给树莓派（`meta.scope=fridge`）
 5. 返回 `scan_id` 供轮询
@@ -241,4 +241,4 @@
 
 ---
 
-变更记录：2026-06-24 拍照上传增加 img_sec_check；2026-06-12 初版；2026-06-16 补充 `/retry` 与空识别结果约定
+变更记录：2026-06-24 大图服务端压缩后送 img_sec_check；2026-06-24 拍照上传增加 img_sec_check；2026-06-12 初版；2026-06-16 补充 `/retry` 与空识别结果约定
